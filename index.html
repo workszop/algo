@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Algorithm Visualizer</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .gauge-dial { transition: transform 0.5s ease-in-out; }
+        .neuron, .connection { transition: all 0.3s ease-in-out; }
+        .node text { pointer-events: none; }
+        .path-highlight { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: dash 2s linear forwards; }
+        @keyframes dash { to { stroke-dashoffset: 0; } }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+        // --- ICONS ---
+        const BrainIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.44 2.5 2.5 0 0 1 2.5-4.05 2.5 2.5 0 0 1 4.42-2.42 2.5 2.5 0 0 1-2.96-3.44A2.5 2.5 0 0 1 9.5 2Z" /><path d="M14.5 2a2.5 2.5 0 0 0-2.5 2.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.44 2.5 2.5 0 0 0-2.5-4.05 2.5 2.5 0 0 0-4.42-2.42 2.5 2.5 0 0 0 2.96-3.44A2.5 2.5 0 0 0 14.5 2Z" /></svg>;
+        const TreeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 10.7a5 5 0 0 1-5-5V2" /><path d="M14 10.7a5 5 0 0 0 5-5V2" /><path d="M12 22V11" /><path d="M5 5a5 5 0 0 0 5 5h4a5 5 0 0 0 5-5" /></svg>;
+        const UsersIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
+        const LineChartIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>;
+        const SigmaIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 7V4H6v3" /><path d="M6 17v3h12v-3" /><path d="M18 11H6" /></svg>;
+        const ImageIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>;
+
+        const algorithms = [
+            { id: 'tree', name: 'Drzewa Decyzyjne', icon: <TreeIcon />, description: "Jak seria pytań tak/nie, które pomagają podjąć decyzję." },
+            { id: 'knn', name: 'K-Najbliższych Sąsiadów', icon: <UsersIcon />, description: "Działa jak głosowanie - decyzja zależy od najbliższych sąsiadów." },
+            { id: 'linear', name: 'Regresja Liniowa', icon: <LineChartIcon />, description: "Znajduje najlepszą prostą, która pasuje do danych." },
+            { id: 'logistic', name: 'Regresja Logistyczna', icon: <SigmaIcon />, description: "Przewiduje prawdopodobieństwo, czy coś należy do kategorii." },
+            { id: 'nn', name: 'Sieć Neuronowa', icon: <BrainIcon />, description: "System wzorowany na mózgu, który uczy się rozpoznawać wzorce." },
+            { id: 'cnn', name: 'Sieć Konwolucyjna (CNN)', icon: <ImageIcon />, description: "Specjalna sieć neuronowa, która 'widzi' obrazy warstwami." }
+        ];
+
+        // --- HELPER COMPONENTS ---
+        const Section = ({ title, children, defaultOpen = false }) => {
+            const [isOpen, setIsOpen] = useState(defaultOpen);
+            return (
+                <div className="bg-slate-800/50 rounded-lg my-4">
+                    <button
+                        className="w-full text-left p-4 font-semibold flex justify-between items-center"
+                        onClick={() => setIsOpen(!isOpen)}
+                    >
+                        {title}
+                        <span className={`transform transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`}>
+                            <i className="fas fa-chevron-down"></i>
+                        </span>
+                    </button>
+                    {isOpen && <div className="p-4 pt-0 text-slate-300">{children}</div>}
+                </div>
+            );
+        };
+
+        const Slider = ({ label, value, min, max, step, onChange, unit = "" }) => (
+            <div className="my-2">
+                <label className="block text-sm font-medium text-slate-300 mb-1">{label}: <span className="font-bold text-cyan-400">{value}{unit}</span></label>
+                <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value}
+                    onChange={onChange}
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                />
+            </div>
+        );
+        
+        // --- ALGORITHM VISUALIZERS ---
+
+        // 1. Decision Tree
+        const DecisionTreeVisualizer = () => {
+            const [patient, setPatient] = useState({ fever: 50, cough: 50, breathingDifficulty: 50 });
+            const [result, setResult] = useState(null);
+            const [path, setPath] = useState([]);
+
+            const tree = {
+              id: 'q1',
+              question: "Gorączka?",
+              type: 'question',
+              threshold: 50, // niska vs wysoka
+              property: 'fever',
+              left: {
+                id: 'q2',
+                question: "Kaszel?",
+                type: 'question',
+                threshold: 50, // słaby vs silny
+                property: 'cough',
+                left: { id: 'a1', type: 'answer', value: 'Zdrowy' },
+                right: { id: 'a2', type: 'answer', value: 'Przeziębienie' }
+              },
+              right: {
+                id: 'q3',
+                question: "Oddech?",
+                type: 'question',
+                threshold: 50, // normalny vs utrudniony
+                property: 'breathingDifficulty',
+                left: { id: 'a3', type: 'answer', value: 'Grypa' },
+                right: { id: 'a4', type: 'answer', value: 'COVID-19' }
+              }
+            };
+            
+            const handleClassify = () => {
+                let currentNode = tree;
+                const newPath = [currentNode.id];
+                while(currentNode.type === 'question') {
+                    if (patient[currentNode.property] < currentNode.threshold) {
+                        currentNode = currentNode.left;
+                    } else {
+                        currentNode = currentNode.right;
+                    }
+                    newPath.push(currentNode.id);
+                }
+                setPath(newPath);
+                setResult(currentNode.value);
+            };
+
+            const reset = () => {
+              setPatient({ fever: 50, cough: 50, breathingDifficulty: 50 });
+              setResult(null);
+              setPath([]);
+            }
+
+            const randomize = () => {
+              setPatient({
+                fever: Math.random() * 100,
+                cough: Math.random() * 100,
+                breathingDifficulty: Math.random() * 100,
+              });
+              setResult(null);
+              setPath([]);
+            }
+
+            const treeLayout = {
+              q1: { x: 300, y: 50 },
+              q2: { x: 150, y: 150 },
+              q3: { x: 450, y: 150 },
+              a1: { x: 75, y: 250 },
+              a2: { x: 225, y: 250 },
+              a3: { x: 375, y: 250 },
+              a4: { x: 525, y: 250 },
+            };
+            
+            return (
+                <div className="grid md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4 text-center">System Wspomagania Diagnozy Medycznej</h3>
+                        <svg viewBox="0 0 600 300" className="w-full h-auto">
+                          {/* Connections */}
+                          {[
+                            { from: 'q1', to: 'q2' }, { from: 'q1', to: 'q3' },
+                            { from: 'q2', to: 'a1' }, { from: 'q2', to: 'a2' },
+                            { from: 'q3', to: 'a3' }, { from: 'q3', to: 'a4' },
+                          ].map(({ from, to }) => (
+                            <line key={`${from}-${to}`}
+                                x1={treeLayout[from].x} y1={treeLayout[from].y}
+                                x2={treeLayout[to].x} y2={treeLayout[to].y}
+                                className={`stroke-slate-500 transition-all duration-500
+                                  ${path.includes(from) && path.includes(to) ? 'stroke-cyan-400 stroke-2 path-highlight' : ''}`}
+                            />
+                          ))}
+                          {/* Nodes */}
+                          {Object.entries(treeLayout).map(([id, pos]) => {
+                            const node = id.startsWith('q') 
+                               ? (id === 'q1' ? tree : id === 'q2' ? tree.left : tree.right) 
+                               : (id === 'a1' ? tree.left.left : id === 'a2' ? tree.left.right : id === 'a3' ? tree.right.left : tree.right.right);
+                            const isQuestion = node.type === 'question';
+                            const isActive = path.includes(id);
+
+                            return (
+                              <g key={id} className="node">
+                                <circle cx={pos.x} cy={pos.y} r={isQuestion ? 30 : 25}
+                                  className={`transition-all duration-500 ${isQuestion ? 'fill-slate-700' : 'fill-emerald-600'} 
+                                  ${isActive ? 'stroke-cyan-400 stroke-4' : 'stroke-slate-500 stroke-1'}`}
+                                />
+                                <text x={pos.x} y={pos.y + 5} textAnchor="middle" className="fill-white text-xs font-semibold">
+                                  {isQuestion ? node.question : node.value}
+                                </text>
+                              </g>
+                            )
+                          })}
+                        </svg>
+                    </div>
+                    <div className="p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4">Objawy Pacjenta</h3>
+                        <Slider label="Gorączka (Niska ↔ Wysoka)" min={0} max={100} value={patient.fever} onChange={e => setPatient(p => ({...p, fever: +e.target.value}))} />
+                        <Slider label="Kaszel (Słaby ↔ Silny)" min={0} max={100} value={patient.cough} onChange={e => setPatient(p => ({...p, cough: +e.target.value}))} />
+                        <Slider label="Oddychanie (Normalne ↔ Utrudnione)" min={0} max={100} value={patient.breathingDifficulty} onChange={e => setPatient(p => ({...p, breathingDifficulty: +e.target.value}))} />
+                        <button onClick={handleClassify} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg mt-4 transition-colors">
+                            Diagnozuj
+                        </button>
+                        <div className="flex space-x-2 mt-2">
+                          <button onClick={reset} className="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Reset</button>
+                          <button onClick={randomize} className="w-full bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Losuj</button>
+                        </div>
+                        {result && (
+                            <div className="mt-4 p-4 bg-slate-700 rounded-lg text-center fade-in">
+                                <p className="text-slate-300">Diagnoza:</p>
+                                <p className={`text-2xl font-bold ${result === 'Zdrowy' ? 'text-emerald-400' : result === 'Przeziębienie' ? 'text-blue-400' : result === 'Grypa' ? 'text-yellow-400' : 'text-red-400'}`}>{result}</p>
+                                {result !== 'Zdrowy' && <p className="text-xs text-slate-400 mt-2">⚠️ To tylko symulacja edukacyjna</p>}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+        
+        // 2. KNN
+        const KnnVisualizer = () => {
+            const [k, setK] = useState(5);
+            const [points, setPoints] = useState(() => Array.from({ length: 50 }, () => ({
+                x: Math.random() * 100,
+                y: Math.random() * 100,
+                class: Math.random() > 0.5 ? 0 : 1 // 0: akcja, 1: komedia
+            })));
+            const [newPoint, setNewPoint] = useState({ x: 50, y: 50 });
+
+            const { neighbors, result } = useMemo(() => {
+                const distances = points.map((p, i) => ({
+                    index: i,
+                    dist: Math.sqrt(Math.pow(p.x - newPoint.x, 2) + Math.pow(p.y - newPoint.y, 2))
+                })).sort((a, b) => a.dist - b.dist);
+
+                const nearest = distances.slice(0, k);
+                const classCounts = nearest.reduce((acc, neighbor) => {
+                    const pointClass = points[neighbor.index].class;
+                    acc[pointClass] = (acc[pointClass] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const resultClass = Object.keys(classCounts).reduce((a, b) => classCounts[a] > classCounts[b] ? a : b);
+
+                return {
+                    neighbors: nearest.map(n => n.index),
+                    result: resultClass == 0 ? "Film Akcji 🎬" : "Komedia 😂"
+                };
+            }, [k, points, newPoint]);
+            
+            const handleDrag = (e) => {
+                const svg = e.currentTarget;
+                const CTM = svg.getScreenCTM();
+                const pt = svg.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                const { x, y } = pt.matrixTransform(CTM.inverse());
+                setNewPoint({
+                    x: Math.max(0, Math.min(100, x)),
+                    y: Math.max(0, Math.min(100, y))
+                });
+            };
+
+            return (
+                 <div className="grid md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4 text-center">System Rekomendacji Filmów</h3>
+                        <svg viewBox="0 0 100 100" className="w-full h-auto bg-slate-800 rounded-lg cursor-pointer" onPointerMove={e => e.buttons === 1 && handleDrag(e)} onPointerDown={handleDrag}>
+                            <text x="50" y="98" textAnchor="middle" className="text-[3px] fill-slate-400">Intensywność akcji</text>
+                            <text x="2" y="50" textAnchor="middle" transform="rotate(-90 2 50)" className="text-[3px] fill-slate-400">Poziom humoru</text>
+                            
+                            {/* Neighbors lines */}
+                            {neighbors.map(i => (
+                                <line key={i} x1={newPoint.x} y1={newPoint.y} x2={points[i].x} y2={points[i].y} className="stroke-slate-500/50" strokeWidth="0.5" />
+                            ))}
+
+                            {/* Points */}
+                            {points.map((p, i) => (
+                                <circle key={i} cx={p.x} cy={p.y} r="1" 
+                                className={`${p.class === 0 ? 'fill-red-500' : 'fill-blue-500'} transition-all duration-300 ${neighbors.includes(i) ? 'opacity-100' : 'opacity-50'}`} />
+                            ))}
+                            
+                            {/* New point */}
+                            <circle cx={newPoint.x} cy={newPoint.y} r="1.5" className="fill-cyan-400 stroke-white" strokeWidth="0.5" />
+
+                             {/* Neighbor circle */}
+                            <circle cx={newPoint.x} cy={newPoint.y} r={neighbors.length > 0 ? points.map((p,i) => ({i, dist: Math.sqrt(Math.pow(p.x - newPoint.x, 2) + Math.pow(p.y - newPoint.y, 2))})).sort((a,b)=>a.dist-b.dist)[k-1]?.dist : 0} 
+                            className="fill-cyan-400/10 stroke-cyan-400/50 transition-all duration-300" strokeWidth="0.2" />
+                        </svg>
+                    </div>
+                     <div className="p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4">Panel Kontrolny</h3>
+                        <Slider label="Liczba podobnych użytkowników (K)" min={1} max={15} step={1} value={k} onChange={e => setK(+e.target.value)} />
+
+                        <div className="mt-6 p-4 bg-slate-700 rounded-lg text-center">
+                            <p className="text-slate-300">Rekomendacja dla Ciebie:</p>
+                            <p className={`text-2xl font-bold ${result.includes("Akcji") ? "text-red-400" : "text-blue-400"}`}>{result}</p>
+                        </div>
+
+                         <div className="mt-4 text-xs text-slate-400">
+                             <p className="font-semibold mb-2">Legenda:</p>
+                             <p><span className="w-3 h-3 inline-block bg-red-500 rounded-full mr-2"></span>Użytkownicy lubiący filmy akcji</p>
+                             <p><span className="w-3 h-3 inline-block bg-blue-500 rounded-full mr-2"></span>Użytkownicy lubiący komedie</p>
+                             <p><span className="w-3 h-3 inline-block bg-cyan-400 rounded-full mr-2"></span>Ty (przeciągnij, aby zmienić preferencje!)</p>
+                         </div>
+
+                         <div className="mt-4 p-3 bg-slate-700/50 rounded-lg text-xs">
+                             <p className="text-slate-400">💡 Im więcej K (sąsiadów), tym bardziej ogólna rekomendacja. Mniejsze K = bardziej personalizowane, ale może być mniej stabilne.</p>
+                         </div>
+                    </div>
+                </div>
+            );
+        };
+        
+        // 3. Linear Regression
+        const LinearRegressionVisualizer = () => {
+            const [points, setPoints] = useState([
+                { x: 5, y: 20 }, { x: 10, y: 30 }, { x: 15, y: 35 }, { x: 20, y: 45 },
+                { x: 25, y: 50 }, { x: 30, y: 60 }, { x: 35, y: 65 }, { x: 40, y: 75 },
+                { x: 45, y: 80 }, { x: 50, y: 85 }, { x: 55, y: 90 }
+            ]);
+            const [showErrors, setShowErrors] = useState(true);
+
+            const { slope, intercept, rSquared } = useMemo(() => {
+                if (points.length < 2) return { slope: 0, intercept: 0, rSquared: 0 };
+                const n = points.length;
+                const sumX = points.reduce((acc, p) => acc + p.x, 0);
+                const sumY = points.reduce((acc, p) => acc + p.y, 0);
+                const sumXY = points.reduce((acc, p) => acc + p.x * p.y, 0);
+                const sumX2 = points.reduce((acc, p) => acc + p.x * p.x, 0);
+
+                const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+                const intercept = (sumY - slope * sumX) / n;
+                
+                let ssTotal = 0;
+                let ssRes = 0;
+                const meanY = sumY / n;
+                for (const p of points) {
+                    ssTotal += Math.pow(p.y - meanY, 2);
+                    ssRes += Math.pow(p.y - (slope * p.x + intercept), 2);
+                }
+
+                const rSquared = 1 - (ssRes / ssTotal);
+
+                return { slope, intercept, rSquared: isNaN(rSquared) ? 0 : rSquared };
+            }, [points]);
+            
+            const handleClick = (e) => {
+                const svg = e.currentTarget;
+                const pt = svg.createSVGPoint();
+                pt.x = e.clientX;
+                pt.y = e.clientY;
+                const { x, y } = pt.matrixTransform(svg.getScreenCTM().inverse());
+                if(e.ctrlKey || e.metaKey){
+                    // remove nearest point
+                    const distances = points.map((p,i) => ({i, dist: Math.sqrt(Math.pow(p.x-x,2)+Math.pow(p.y-y,2))}));
+                    distances.sort((a,b)=>a.dist-b.dist);
+                    if(distances.length > 0 && distances[0].dist < 5){
+                        setPoints(pts => pts.filter((_,i) => i !== distances[0].i));
+                    }
+                } else {
+                    setPoints(pts => [...pts, { x, y: 100 - y }]);
+                }
+            };
+            
+            return (
+                 <div className="grid md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4 text-center">Ocena vs. Godziny Nauki</h3>
+                        <svg viewBox="0 0 100 100" className="w-full h-auto bg-slate-800 rounded-lg cursor-pointer" onClick={handleClick}>
+                           <text x="50" y="98" textAnchor="middle" className="text-[3px] fill-slate-400">Godziny nauki tygodniowo</text>
+                           <text x="2" y="50" textAnchor="middle" transform="rotate(-90 2 50)" className="text-[3px] fill-slate-400">Ocena (%)</text>
+                            
+                            {/* Error lines */}
+                            {showErrors && points.map((p, i) => (
+                                <line key={`err-${i}`} x1={p.x} y1={100-p.y} x2={p.x} y2={100 - (slope * p.x + intercept)} className="stroke-red-500/50" strokeDasharray="1,1" strokeWidth="0.5" />
+                            ))}
+
+                             {/* Regression line */}
+                             <line x1="0" y1={100 - intercept} x2="100" y2={100 - (slope * 100 + intercept)} className="stroke-cyan-400 transition-all duration-300" strokeWidth="1" />
+
+                            {/* Points */}
+                            {points.map((p, i) => <circle key={i} cx={p.x} cy={100 - p.y} r="1" className="fill-emerald-400" />)}
+                           <text x="5" y="95" className="text-[2px] fill-slate-400">Kliknij, aby dodać punkt. Ctrl/Cmd+Klik, aby usunąć.</text>
+                        </svg>
+                    </div>
+                    <div className="p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4">Metryki Modelu</h3>
+                        <div className="p-4 bg-slate-700 rounded-lg">
+                            <p>Równanie linii:</p>
+                            <p className="font-mono text-cyan-400">y = {slope.toFixed(2)}x + {intercept.toFixed(2)}</p>
+                            <p className="mt-4">Współczynnik R²:</p>
+                            <p className="text-2xl font-bold text-cyan-400">{rSquared.toFixed(3)}</p>
+                        </div>
+                        <div className="mt-4">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" checked={showErrors} onChange={() => setShowErrors(s => !s)} className="form-checkbox h-5 w-5 text-cyan-600 bg-slate-600 border-slate-500 rounded focus:ring-cyan-500" />
+                                <span>Pokaż błędy</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. Logistic Regression
+        const LogisticRegressionVisualizer = () => {
+          const [threshold, setThreshold] = useState(0.5);
+          const [testPoint, setTestPoint] = useState({ x: 5, y: 5 }); // x: dochód, y: historia kredytowa
+
+          // Pre-trained weights for decision boundary: 0.7*x + 0.6*y - 6 = 0
+          const w0 = -6, w1 = 0.7, w2 = 0.6;
+
+          const sigmoid = z => 1 / (1 + Math.exp(-z));
+          const probability = sigmoid(w1 * testPoint.x + w2 * testPoint.y + w0);
+          const classification = probability >= threshold ? "Kredyt Przyznany ✓" : "Kredyt Odrzucony ✗";
+          
+          const handleMove = (e) => {
+            const svg = e.currentTarget;
+            const CTM = svg.getScreenCTM().inverse();
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX; pt.y = e.clientY;
+            const {x, y} = pt.matrixTransform(CTM);
+            setTestPoint({x: Math.max(0, Math.min(10,x)), y: Math.max(0, Math.min(10, 10-y))});
+          };
+
+          return (
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 p-4 bg-slate-800/50 rounded-lg">
+                <h3 className="text-lg font-bold mb-4 text-center">Ocena Zdolności Kredytowej</h3>
+                <svg viewBox="0 0 10 10" className="w-full h-auto bg-slate-800 rounded-lg cursor-pointer" onPointerMove={e => e.buttons === 1 && handleMove(e)} onPointerDown={handleMove}>
+                  <defs>
+                    <linearGradient id="probGradient" x1="0" x2="1" y1="1" y2="0">
+                      <stop offset="0%" stopColor="#ef4444" />
+                      <stop offset="50%" stopColor="#4b5563" />
+                      <stop offset="100%" stopColor="#10b981" />
+                    </linearGradient>
+                  </defs>
+                  <rect width="10" height="10" fill="url(#probGradient)" opacity="0.3" />
+
+                  {/* Decision Boundary */}
+                  <line x1={0} y1={10 - ((-w0 - w1*0)/w2)} x2={10} y2={10-((-w0 - w1*10)/w2)} className="stroke-white" strokeWidth="0.1" />
+
+                  {/* Test Point */}
+                  <circle cx={testPoint.x} cy={10-testPoint.y} r="0.2" className="fill-cyan-400 stroke-white" strokeWidth="0.05" />
+                  <text x="5" y="9.8" textAnchor="middle" className="text-[0.3px] fill-slate-400">Dochód miesięczny (tys. zł)</text>
+                  <text x="0.2" y="5" textAnchor="middle" transform="rotate(-90 0.2 5)" className="text-[0.3px] fill-slate-400">Historia kredytowa (punkty)</text>
+                </svg>
+              </div>
+              <div className="p-4 bg-slate-800/50 rounded-lg">
+                <h3 className="text-lg font-bold mb-4">Wynik Klasyfikacji</h3>
+                <div className="relative w-48 h-24 mx-auto my-4">
+                  <svg viewBox="0 0 100 50" className="w-full h-full">
+                    <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" strokeWidth="10" className="stroke-slate-700"/>
+                    <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" strokeWidth="10" className="stroke-cyan-500" 
+                      strokeDasharray="125.6" strokeDashoffset={125.6 * (1 - probability)}
+                    />
+                  </svg>
+                  <div className="absolute bottom-0 w-full text-center">
+                    <div className="text-3xl font-bold text-cyan-400">{(probability * 100).toFixed(0)}%</div>
+                    <div className="text-sm">Prawdopodobieństwa</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-4 bg-slate-700 rounded-lg text-center">
+                    <p className="text-slate-300">Decyzja:</p>
+                    <p className={`text-2xl font-bold ${classification.includes("Przyznany") ? "text-emerald-400" : "text-red-400"}`}>{classification}</p>
+                </div>
+
+                <Slider label="Próg akceptacji" min={0.01} max={0.99} step={0.01} value={threshold} onChange={e => setThreshold(+e.target.value)} />
+
+                <div className="mt-4 p-3 bg-slate-700/50 rounded-lg text-xs">
+                    <p className="font-semibold mb-1">Interpretacja:</p>
+                    <p className="text-slate-400">Próg {(threshold * 100).toFixed(0)}% = minimalne prawdopodobieństwo spłaty kredytu wymagane do przyznania</p>
+                </div>
+              </div>
+            </div>
+          );
+        };
+        
+        // 5. Neural Network
+        const NeuralNetworkVisualizer = () => {
+            const [neuronsHidden, setNeuronsHidden] = useState(4);
+            const [learningRate, setLearningRate] = useState(0.1);
+            const [epoch, setEpoch] = useState(0);
+            const [accuracy, setAccuracy] = useState(0.33);
+            const [loss, setLoss] = useState(1.2);
+            const [weights, setWeights] = useState([]);
+            const [neuronActivations, setNeuronActivations] = useState({});
+            const [isTraining, setIsTraining] = useState(false);
+
+            // Initialize random weights when component mounts or hidden neurons change
+            useEffect(() => {
+                const inputToHidden = Array.from({length: 3}, () =>
+                    Array.from({length: neuronsHidden}, () => Math.random() * 2 - 1)
+                );
+                const hiddenToOutput = Array.from({length: neuronsHidden}, () =>
+                    Array.from({length: 3}, () => Math.random() * 2 - 1)
+                );
+                setWeights({ inputToHidden, hiddenToOutput });
+
+                // Initialize random activations
+                const activations = {};
+                for(let i = 0; i < 3; i++) activations[`in-${i}`] = Math.random();
+                for(let i = 0; i < neuronsHidden; i++) activations[`hid-${i}`] = Math.random();
+                for(let i = 0; i < 3; i++) activations[`out-${i}`] = Math.random();
+                setNeuronActivations(activations);
+            }, [neuronsHidden]);
+
+            const layout = {
+                inputs: [{x:50, y:75}, {x:50, y:150}, {x:50, y:225}],
+                hidden: Array.from({length: neuronsHidden}, (_, i) => ({x: 200, y: 50 + (200/(neuronsHidden-1 || 1))*i})),
+                outputs: [{x:350, y:75}, {x:350, y:150}, {x:350, y:225}]
+            };
+
+            const trainEpoch = () => {
+                setIsTraining(true);
+                setEpoch(e => e + 1);
+
+                // Simulate training - update weights
+                const newInputToHidden = weights.inputToHidden.map(row =>
+                    row.map(w => w + (Math.random() - 0.5) * learningRate)
+                );
+                const newHiddenToOutput = weights.hiddenToOutput.map(row =>
+                    row.map(w => w + (Math.random() - 0.5) * learningRate)
+                );
+                setWeights({ inputToHidden: newInputToHidden, hiddenToOutput: newHiddenToOutput });
+
+                // Update neuron activations
+                const newActivations = {};
+                for(let i = 0; i < 3; i++) newActivations[`in-${i}`] = Math.random() * 0.3 + 0.7;
+                for(let i = 0; i < neuronsHidden; i++) newActivations[`hid-${i}`] = Math.random();
+                for(let i = 0; i < 3; i++) newActivations[`out-${i}`] = i === (epoch % 3) ? Math.random() * 0.3 + 0.7 : Math.random() * 0.3;
+                setNeuronActivations(newActivations);
+
+                // Simulate training metrics
+                setAccuracy(a => Math.min(0.98, a + (0.98 - a) * 0.2 * learningRate));
+                setLoss(l => Math.max(0.05, l * (1 - 0.3 * learningRate)));
+
+                setTimeout(() => setIsTraining(false), 500);
+            };
+
+            return (
+                 <div className="grid md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4 text-center">Klasyfikacja Aktywności Fizycznej</h3>
+                        <svg viewBox="0 0 400 300" className="w-full h-auto">
+                            {/* Connections - Input to Hidden */}
+                            {weights.inputToHidden && layout.inputs.flatMap((input, i) =>
+                                layout.hidden.map((hidden, j) => {
+                                    const weight = weights.inputToHidden[i][j];
+                                    const absWeight = Math.abs(weight);
+                                    const isPositive = weight > 0;
+                                    const opacity = Math.min(absWeight * 0.8 + 0.2, 1);
+                                    const strokeWidth = Math.max(0.3, absWeight * 2);
+                                    return (
+                                        <line key={`in${i}-hid${j}`}
+                                            x1={input.x} y1={input.y} x2={hidden.x} y2={hidden.y}
+                                            stroke={isPositive ? '#10b981' : '#ef4444'}
+                                            strokeOpacity={opacity}
+                                            strokeWidth={strokeWidth}
+                                            className={`connection transition-all duration-500 ${isTraining ? 'pulse' : ''}`}
+                                        />
+                                    );
+                                })
+                            )}
+                            {/* Connections - Hidden to Output */}
+                            {weights.hiddenToOutput && layout.hidden.flatMap((hidden, i) =>
+                                layout.outputs.map((output, j) => {
+                                    const weight = weights.hiddenToOutput[i][j];
+                                    const absWeight = Math.abs(weight);
+                                    const isPositive = weight > 0;
+                                    const opacity = Math.min(absWeight * 0.8 + 0.2, 1);
+                                    const strokeWidth = Math.max(0.3, absWeight * 2);
+                                    return (
+                                        <line key={`hid${i}-out${j}`}
+                                            x1={hidden.x} y1={hidden.y} x2={output.x} y2={output.y}
+                                            stroke={isPositive ? '#10b981' : '#ef4444'}
+                                            strokeOpacity={opacity}
+                                            strokeWidth={strokeWidth}
+                                            className={`connection transition-all duration-500 ${isTraining ? 'pulse' : ''}`}
+                                        />
+                                    );
+                                })
+                            )}
+                            {/* Neurons - Inputs */}
+                            {['Tętno', 'Tempo', 'Czas'].map((label, i) => {
+                                const n = layout.inputs[i];
+                                const activation = neuronActivations[`in-${i}`] || 0;
+                                const brightness = Math.floor(activation * 255);
+                                return (
+                                    <g key={`in-${i}`}>
+                                        <circle cx={n.x} cy={n.y} r="10"
+                                            className="neuron transition-all duration-500"
+                                            fill={`rgb(59, 130, ${brightness})`}
+                                            stroke="#60a5fa" strokeWidth="2"
+                                        />
+                                        <text x={n.x-30} y={n.y+3} className="text-[7px] fill-slate-300">{label}</text>
+                                    </g>
+                                );
+                            })}
+                            {/* Neurons - Hidden */}
+                            {layout.hidden.map((n, i) => {
+                                const activation = neuronActivations[`hid-${i}`] || 0;
+                                const brightness = Math.floor(activation * 200) + 55;
+                                return (
+                                    <circle key={`hid-${i}`} cx={n.x} cy={n.y} r="12"
+                                        className="neuron transition-all duration-500"
+                                        fill={`rgb(${brightness}, ${Math.floor(brightness * 0.6)}, ${brightness})`}
+                                        stroke="#a855f7" strokeWidth="2"
+                                    />
+                                );
+                            })}
+                            {/* Neurons - Outputs */}
+                            {['Bieg', 'Marsz', 'Rower'].map((label, i) => {
+                                const n = layout.outputs[i];
+                                const activation = neuronActivations[`out-${i}`] || 0;
+                                const brightness = Math.floor(activation * 200) + 55;
+                                return (
+                                    <g key={`out-${i}`}>
+                                        <circle cx={n.x} cy={n.y} r="10"
+                                            className="neuron transition-all duration-500"
+                                            fill={`rgb(${Math.floor(brightness * 0.4)}, ${brightness}, ${Math.floor(brightness * 0.6)})`}
+                                            stroke="#10b981" strokeWidth="2"
+                                        />
+                                        <text x={n.x+15} y={n.y+3} className="text-[7px] fill-slate-300">{label}</text>
+                                    </g>
+                                );
+                            })}
+                        </svg>
+                    </div>
+                     <div className="p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4">Trening Modelu</h3>
+                        <Slider label="Neurony w warstwie ukrytej" min={1} max={10} step={1} value={neuronsHidden} onChange={e => setNeuronsHidden(+e.target.value)} />
+                        <Slider label="Tempo uczenia" min={0.01} max={1} step={0.01} value={learningRate} onChange={e => setLearningRate(+e.target.value)} />
+
+                        <button onClick={trainEpoch} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg mt-4 transition-colors">
+                            {isTraining ? 'Trenowanie...' : 'Trenuj jedną epokę'}
+                        </button>
+
+                        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                            <div className="p-2 bg-slate-700 rounded-lg"><div className="text-xs text-slate-400">Epoka</div><div className="font-bold text-lg">{epoch}</div></div>
+                            <div className="p-2 bg-slate-700 rounded-lg"><div className="text-xs text-slate-400">Dokładność</div><div className="font-bold text-lg">{(accuracy*100).toFixed(1)}%</div></div>
+                            <div className="p-2 bg-slate-700 rounded-lg"><div className="text-xs text-slate-400">Strata</div><div className="font-bold text-lg">{loss.toFixed(3)}</div></div>
+                        </div>
+
+                        <div className="mt-6 p-3 bg-slate-700/50 rounded-lg text-xs">
+                            <p className="font-semibold mb-2">Legenda:</p>
+                            <div className="space-y-1">
+                                <p><span className="inline-block w-4 h-0.5 bg-emerald-500 mr-2"></span>Wagi dodatnie (+)</p>
+                                <p><span className="inline-block w-4 h-0.5 bg-red-500 mr-2"></span>Wagi ujemne (-)</p>
+                                <p className="mt-2 text-slate-400">• Grubość linii = siła wagi</p>
+                                <p className="text-slate-400">• Jasność neuronu = aktywacja</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 6. CNN
+        const CnnVisualizer = () => {
+            const canvasRef = useRef(null);
+            const [isDrawing, setIsDrawing] = useState(false);
+            const [prediction, setPrediction] = useState(null);
+            
+            const startDrawing = (e) => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX || e.touches[0].clientX) - rect.left;
+                const y = (e.clientY || e.touches[0].clientY) - rect.top;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                setIsDrawing(true);
+            };
+
+            const draw = (e) => {
+                if (!isDrawing) return;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const rect = canvas.getBoundingClientRect();
+                const x = (e.clientX || e.touches[0].clientX) - rect.left;
+                const y = (e.clientY || e.touches[0].clientY) - rect.top;
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            };
+
+            const stopDrawing = () => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                ctx.closePath();
+                setIsDrawing(false);
+            };
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 18;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            }, []);
+            
+            const clearCanvas = () => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                setPrediction(null);
+            };
+            
+            const recognize = () => {
+                // This is a simulation. In a real app, you'd use TensorFlow.js here.
+                const randomPreds = Array.from({ length: 5 }, () => Math.random());
+                const sum = randomPreds.reduce((a, b) => a + b, 0);
+                const normalized = randomPreds.map(p => p / sum);
+                setPrediction(normalized);
+            };
+
+            return (
+                 <div className="grid md:grid-cols-2 gap-6">
+                    <div className="p-4 bg-slate-800/50 rounded-lg flex flex-col items-center">
+                        <h3 className="text-lg font-bold mb-4">Narysuj cyfrę (0-4)</h3>
+                        <canvas 
+                            ref={canvasRef} 
+                            width="280" 
+                            height="280" 
+                            className="bg-black rounded-lg cursor-crosshair touch-none"
+                            onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
+                            onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
+                        ></canvas>
+                        <div className="flex space-x-2 mt-4">
+                            <button onClick={recognize} className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Rozpoznaj</button>
+                            <button onClick={clearCanvas} className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Wyczyść</button>
+                        </div>
+                    </div>
+                    <div className="p-4 bg-slate-800/50 rounded-lg">
+                        <h3 className="text-lg font-bold mb-4">Wyniki predykcji</h3>
+                        {prediction ? (
+                            <div className="space-y-2">
+                                {prediction.map((p, i) => (
+                                    <div key={i} className="flex items-center space-x-4">
+                                        <span className="text-2xl font-bold w-6 text-center">{i}</span>
+                                        <div className="w-full bg-slate-700 rounded-full h-6">
+                                            <div className="bg-cyan-500 h-6 rounded-full text-right pr-2 text-black font-bold" style={{ width: `${p * 100}%` }}>
+                                                {(p * 100).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="text-center pt-4">
+                                   <p className="text-slate-300">Sieć myśli, że to:</p>
+                                   <p className="text-4xl font-bold text-cyan-400">{prediction.indexOf(Math.max(...prediction))}</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center text-slate-400 h-full flex items-center justify-center">
+                                Narysuj cyfrę i kliknij "Rozpoznaj".
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+        
+        // --- LAYOUT COMPONENTS ---
+        const HomePage = ({ onSelectAlgorithm }) => {
+            return (
+                <div className="text-center py-10 px-4 fade-in">
+                    <BrainIcon className="mx-auto h-16 w-16 text-cyan-400" />
+                    <h1 className="text-4xl md:text-5xl font-bold text-white mt-4">AI Algorithm Visualizer</h1>
+                    <p className="text-lg text-slate-300 mt-2 max-w-2xl mx-auto">Zrozum sztuczną inteligencję poprzez interaktywne wizualizacje</p>
+                    <div className="mt-8">
+                        <button 
+                            onClick={() => onSelectAlgorithm('tree')}
+                            className="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-transform hover:scale-105"
+                        >
+                            Rozpocznij naukę
+                        </button>
+                    </div>
+
+                    <div className="mt-16">
+                         <h2 className="text-2xl font-semibold text-white mb-6">Wybierz algorytm do eksploracji</h2>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                            {algorithms.map(alg => (
+                                <button key={alg.id} onClick={() => onSelectAlgorithm(alg.id)}
+                                    className="bg-slate-800 p-6 rounded-lg text-left hover:bg-slate-700/50 hover:ring-2 hover:ring-cyan-500 transition-all duration-300 transform hover:-translate-y-1"
+                                >
+                                    <div className="flex items-center space-x-4">
+                                        <div className="text-cyan-400">{alg.icon}</div>
+                                        <div>
+                                            <h3 className="font-bold text-white">{alg.name}</h3>
+                                            <p className="text-sm text-slate-400 mt-1">{alg.description}</p>
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                         </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ModulePage = ({ module, onSelectAlgorithm, onGoHome }) => {
+            const CurrentVisualizer = {
+                tree: DecisionTreeVisualizer,
+                knn: KnnVisualizer,
+                linear: LinearRegressionVisualizer,
+                logistic: LogisticRegressionVisualizer,
+                nn: NeuralNetworkVisualizer,
+                cnn: CnnVisualizer,
+            }[module.id];
+
+            return (
+                <div className="flex flex-col md:flex-row min-h-screen">
+                    {/* Sidebar */}
+                    <nav className="w-full md:w-64 bg-slate-900 md:bg-black/20 p-4 shrink-0">
+                        <div className="sticky top-4">
+                            <button onClick={onGoHome} className="flex items-center space-x-2 text-lg font-bold mb-6 text-white">
+                                <BrainIcon /> <span>AI Visualizer</span>
+                            </button>
+                            <ul>
+                                {algorithms.map(alg => (
+                                    <li key={alg.id}>
+                                        <button 
+                                            onClick={() => onSelectAlgorithm(alg.id)}
+                                            className={`w-full text-left flex items-center space-x-3 p-2 rounded-lg my-1 transition-colors ${
+                                                module.id === alg.id 
+                                                ? 'bg-cyan-500/20 text-cyan-300 font-semibold'
+                                                : 'text-slate-300 hover:bg-slate-700/50'
+                                            }`}
+                                        >
+                                            <span className="shrink-0">{alg.icon}</span>
+                                            <span>{alg.name}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </nav>
+
+                    {/* Main Content */}
+                    <main className="flex-1 p-4 md:p-8">
+                        <div className="max-w-7xl mx-auto">
+                            <h1 className="text-3xl font-bold text-white mb-2">{module.name}</h1>
+                            <p className="text-slate-400 mb-6">{module.description}</p>
+                            
+                            <div className="bg-slate-800 rounded-xl p-4 md:p-6 fade-in">
+                                <CurrentVisualizer />
+                            </div>
+
+                            <Section title="ℹ️ Jak to działa?">
+                                {module.id === 'tree' && (
+                                    <div className="space-y-3">
+                                        <p className="text-slate-200 font-semibold">Drzewo decyzyjne w diagnostyce medycznej - klasyfikacja chorób układu oddechowego:</p>
+                                        <ol className="list-decimal pl-5 space-y-2">
+                                            <li><strong>Pytanie 1 - Gorączka:</strong> Algorytm zaczyna od korzenia: "Czy pacjent ma gorączkę?" - jeśli niska (&lt;50), idź w lewo, jeśli wysoka (≥50), idź w prawo.</li>
+                                            <li><strong>Pytanie 2 (dla niskiej gorączki):</strong> "Czy występuje kaszel?" - słaby lub brak = <span className="text-emerald-400">Zdrowy</span>, silny = <span className="text-blue-400">Przeziębienie</span>.</li>
+                                            <li><strong>Pytanie 3 (dla wysokiej gorączki):</strong> "Czy oddychanie jest utrudnione?" - normalne = <span className="text-yellow-400">Grypa</span>, utrudnione = <span className="text-red-400">COVID-19</span>.</li>
+                                            <li><strong>Trening:</strong> W rzeczywistości drzewo jest budowane na podstawie tysięcy przypadków medycznych - algorytm wybiera najważniejsze objawy i progi, które najlepiej różnicują choroby.</li>
+                                        </ol>
+                                        <p className="text-slate-300 bg-slate-700/50 p-3 rounded mt-3">💡 <strong>Wskazówka:</strong> Każdy węzeł to pytanie diagnostyczne, zielone liście to diagnozy. Przykłady: gorączka=70, oddech=70 = COVID-19 | gorączka=30, kaszel=20 = Zdrowy. ⚠️ To tylko symulacja edukacyjna!</p>
+                                    </div>
+                                )}
+                                {module.id === 'knn' && (
+                                    <div className="space-y-3">
+                                        <p className="text-slate-200 font-semibold">K-Najbliższych Sąsiadów w systemie rekomendacji filmów - jak Netflix poleca filmy:</p>
+                                        <ol className="list-decimal pl-5 space-y-2">
+                                            <li><strong>Profil użytkownika:</strong> Każdy użytkownik (punkt) jest opisany przez preferencje filmowe: intensywność akcji (oś X) vs poziom humoru (oś Y). Cyan punkt to Ty!</li>
+                                            <li><strong>Znajdź podobnych użytkowników:</strong> Algorytm mierzy odległość między Tobą a wszystkimi innymi użytkownikami. Im bliżej punkty, tym bardziej podobne gusty filmowe.</li>
+                                            <li><strong>Wybierz K najbliższych:</strong> System wybiera K najbliższych użytkowników (szare linie). Okrąg pokazuje zasięg "strefy podobieństwa". Czerwoni lubią akcję 🎬, niebiescy komedie 😂.</li>
+                                            <li><strong>Głosowanie:</strong> System sprawdza, jakie filmy lubią Twoi "sąsiedzi" - jeśli większość lubi akcję, dostaniesz rekomendację filmu akcji.</li>
+                                        </ol>
+                                        <p className="text-slate-300 bg-slate-700/50 p-3 rounded mt-3">💡 <strong>Wskazówka:</strong> Przeciągnij cyan punkt i zobacz jak zmieniają się rekomendacje! Przykład: jeśli lubisz dużo akcji (X=80) i mało humoru (Y=20), system poleci film akcji.</p>
+                                    </div>
+                                )}
+                                {module.id === 'linear' && (
+                                    <div className="space-y-3">
+                                        <p className="text-slate-200 font-semibold">Regresja liniowa przewiduje ocenę studenta na podstawie godzin nauki:</p>
+                                        <ol className="list-decimal pl-5 space-y-2">
+                                            <li><strong>Zdefiniuj prostą:</strong> Każda prosta opisana jest równaniem y = ax + b, gdzie 'a' to nachylenie (jak szybko rośnie ocena z każdą dodatkową godziną), a 'b' to punkt przecięcia z osią Y (bazowa ocena).</li>
+                                            <li><strong>Zmierz błąd:</strong> Dla każdego studenta (zielony punkt) obliczamy różnicę między rzeczywistą oceną a oceną przewidywaną przez prostą (czerwone linie przerywane).</li>
+                                            <li><strong>Minimalizuj błędy:</strong> Algorytm szuka takich wartości 'a' i 'b', które minimalizują sumę kwadratów tych błędów (metoda najmniejszych kwadratów).</li>
+                                            <li><strong>Predykcja:</strong> Gdy prosta jest gotowa, możemy przewidzieć ocenę dla dowolnej liczby godzin nauki (np. "Student uczący się 25h/tydzień dostanie ~50%").</li>
+                                        </ol>
+                                        <p className="text-slate-300 bg-slate-700/50 p-3 rounded mt-3">💡 <strong>Wskazówka:</strong> Kliknij wykres, aby dodać nowe punkty danych. Ctrl+Klik usuwa punkty. R² pokazuje jakość dopasowania (1.0 = idealne, 0.0 = słabe).</p>
+                                    </div>
+                                )}
+                                {module.id === 'logistic' && (
+                                    <div className="space-y-3">
+                                        <p className="text-slate-200 font-semibold">Regresja logistyczna w bankowości - ocena zdolności kredytowej klienta:</p>
+                                        <ol className="list-decimal pl-5 space-y-2">
+                                            <li><strong>Kombinacja liniowa:</strong> Tworzymy kombinację cech finansowych: z = 0.7×(dochód) + 0.6×(historia kredytowa) - 6</li>
+                                            <li><strong>Funkcja sigmoid:</strong> Przepuszczamy 'z' przez funkcję sigmoid: σ(z) = 1/(1+e⁻ᶻ), która "ściska" wynik do zakresu [0,1].</li>
+                                            <li><strong>Interpretacja jako ryzyko:</strong> Wynik interpretujemy jako prawdopodobieństwo spłaty kredytu (np. 0.85 = 85% szans, że klient spłaci kredyt). Wskaźnik pokazuje to wizualnie.</li>
+                                            <li><strong>Próg akceptacji:</strong> Bank ustawia próg (np. 0.5 = 50%) - powyżej to "Kredyt Przyznany", poniżej to "Kredyt Odrzucony". Wyższy próg = bardziej konserwatywna polityka kredytowa.</li>
+                                        </ol>
+                                        <p className="text-slate-300 bg-slate-700/50 p-3 rounded mt-3">💡 <strong>Wskazówka:</strong> Biała linia to granica decyzyjna. Gradient: czerwony = wysokie ryzyko (odmowa), zielony = niskie ryzyko (przyznanie). Przeciągnij cyan punkt, aby przetestować różnych klientów!</p>
+                                    </div>
+                                )}
+                                {module.id === 'nn' && (
+                                    <div className="space-y-3">
+                                        <p className="text-slate-200 font-semibold">Sieć neuronowa klasyfikuje aktywność fizyczną (Bieg/Marsz/Rower) - zobacz wagi i aktywacje w akcji!</p>
+                                        <ol className="list-decimal pl-5 space-y-2">
+                                            <li><strong>Warstwa wejściowa (niebieska):</strong> 3 neurony otrzymują cechy: Tętno, Tempo, Czas. Jasność neuronu pokazuje wartość aktywacji.</li>
+                                            <li><strong>Warstwy ukryte (fioletowa):</strong> Neurony pośrednie łączą informacje z wejścia. Możesz zmienić ich liczbę suwakiem!</li>
+                                            <li><strong>Warstwa wyjściowa (zielona):</strong> 3 neurony reprezentują klasy: Bieg, Marsz, Rower. Jaśniejszy neuron = wyższa pewność.</li>
+                                            <li><strong>Wizualizacja wag:</strong> Linie łączące neurony to wagi. <span className="text-emerald-400">Zielone</span> to wagi dodatnie (wzmacniają sygnał), <span className="text-red-400">czerwone</span> to ujemne (osłabiają). Grubość = siła wagi.</li>
+                                            <li><strong>Uczenie:</strong> Kliknij "Trenuj jedną epokę" - wagi się zmieniają (kolory i grubość linii), neurony "uczą się" rozpoznawać wzorce. Obserwuj wzrost dokładności!</li>
+                                        </ol>
+                                        <p className="text-slate-300 bg-slate-700/50 p-3 rounded mt-3">💡 <strong>Wskazówka:</strong> Kliknij "Trenuj" kilka razy i obserwuj animacje! Tempo uczenia kontroluje, jak szybko zmieniają się wagi. Więcej neuronów ukrytych = bardziej złożona sieć.</p>
+                                    </div>
+                                )}
+                                {module.id === 'cnn' && (
+                                    <div className="space-y-3">
+                                        <p className="text-slate-200 font-semibold">CNN (Convolutional Neural Network) to specjalna architektura sieci do analizy obrazów:</p>
+                                        <ol className="list-decimal pl-5 space-y-2">
+                                            <li><strong>Warstwy konwolucyjne:</strong> Przesuwają małe filtry (kernele) po obrazie, wykrywając lokalne wzorce jak krawędzie, tekstury.</li>
+                                            <li><strong>Hierarchia cech:</strong> Pierwsze warstwy wykrywają proste wzorce (linie), kolejne łączą je w bardziej złożone (kształty, części obiektów).</li>
+                                            <li><strong>Pooling:</strong> Zmniejsza wymiary, zachowując najważniejsze informacje (np. max pooling bierze maksymalną wartość z obszaru).</li>
+                                            <li><strong>Warstwy fully-connected:</strong> Na końcu tradycyjne warstwy neuronowe łączą wykryte cechy i podejmują decyzję o klasie.</li>
+                                            <li><strong>Softmax:</strong> Ostatnia warstwa przekształca wyjścia w prawdopodobieństwa sumujące się do 100%.</li>
+                                        </ol>
+                                        <p className="text-slate-300 bg-slate-700/50 p-3 rounded mt-3">💡 <strong>Wskazówka:</strong> CNN są szczególnie skuteczne w rozpoznawaniu obrazów, ponieważ zachowują informację o przestrzennym układzie pikseli, w przeciwieństwie do zwykłych sieci.</p>
+                                    </div>
+                                )}
+                            </Section>
+
+                            <Section title="💼 Zastosowania w praktyce">
+                                {module.id === 'tree' && (
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        <li><strong>Medycyna - diagnoza chorób:</strong> Drzewa decyzyjne pomagają lekarzom w diagnostyce, zadając pytania o objawy (np. "Czy pacjent ma gorączkę?", "Czy ból jest ostry?") i prowadząc do prawdopodobnej diagnozy.</li>
+                                        <li><strong>Bankowość - ocena ryzyka kredytowego:</strong> Banki używają drzew do decyzji o udzieleniu kredytu, analizując dochody, historię kredytową, wiek i inne czynniki.</li>
+                                        <li><strong>Marketing - segmentacja klientów:</strong> Firmy klasyfikują klientów według zachowań zakupowych, aby lepiej targetować kampanie reklamowe.</li>
+                                        <li><strong>E-commerce - rekomendacje produktów:</strong> Systemy rekomendacji używają drzew do sugerowania produktów na podstawie historii przeglądania i zakupów.</li>
+                                        <li><strong>Przemysł - kontrola jakości:</strong> Automatyczna klasyfikacja produktów jako "dobre" lub "wadliwe" na podstawie parametrów technicznych.</li>
+                                    </ul>
+                                )}
+                                {module.id === 'knn' && (
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        <li><strong>Systemy rekomendacji:</strong> Netflix, Spotify i inne platformy używają KNN do polecania filmów/muzyki na podstawie preferencji podobnych użytkowników.</li>
+                                        <li><strong>Rozpoznawanie pisma ręcznego:</strong> Klasyfikacja ręcznie napisanych cyfr i liter poprzez porównanie z bazą przykładów.</li>
+                                        <li><strong>Diagnostyka medyczna:</strong> Klasyfikacja pacjentów do grup ryzyka na podstawie podobieństwa parametrów zdrowotnych do wcześniej zdiagnozowanych przypadków.</li>
+                                        <li><strong>Ocena nieruchomości:</strong> Przewidywanie cen domów/mieszkań na podstawie podobnych nieruchomości w okolicy (lokalizacja, powierzchnia, liczba pokoi).</li>
+                                        <li><strong>Detekcja anomalii:</strong> Wykrywanie nietypowych transakcji finansowych lub zachowań sieciowych poprzez identyfikację punktów oddalonych od "normalnych sąsiadów".</li>
+                                    </ul>
+                                )}
+                                {module.id === 'linear' && (
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        <li><strong>Prognozowanie sprzedaży:</strong> Firmy przewidują przyszłą sprzedaż na podstawie trendów historycznych, sezonowości i budżetu marketingowego.</li>
+                                        <li><strong>Wycena nieruchomości:</strong> Oszacowanie ceny domu na podstawie powierzchni, lokalizacji, wieku budynku i innych czynników.</li>
+                                        <li><strong>Finanse - analiza ryzyka:</strong> Przewidywanie zwrotu z inwestycji (ROI) na podstawie różnych wskaźników ekonomicznych.</li>
+                                        <li><strong>Nauki przyrodnicze:</strong> Modelowanie zależności między zmiennymi (np. temperatura vs. zużycie energii, nawożenie vs. plony).</li>
+                                        <li><strong>Marketing - optymalizacja budżetu:</strong> Określenie, jak wydatki na reklamę wpływają na liczbę konwersji/sprzedaży.</li>
+                                    </ul>
+                                )}
+                                {module.id === 'logistic' && (
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        <li><strong>Filtrowanie spamu:</strong> Klasyfikacja emaili jako SPAM/nie-SPAM na podstawie słów kluczowych, nadawcy, struktury wiadomości.</li>
+                                        <li><strong>Diagnostyka medyczna:</strong> Przewidywanie prawdopodobieństwa choroby (np. cukrzyca, choroby serca) na podstawie wyników badań.</li>
+                                        <li><strong>Ocena ryzyka kredytowego:</strong> Banki obliczają prawdopodobieństwo niespłacenia kredytu przez klienta.</li>
+                                        <li><strong>Marketing - prognozowanie konwersji:</strong> Przewidywanie, czy użytkownik kliknie reklamę lub dokona zakupu.</li>
+                                        <li><strong>Rozpoznawanie obrazów (proste przypadki):</strong> Klasyfikacja binarna obrazów (np. czy zdjęcie zawiera kota czy nie).</li>
+                                        <li><strong>Analiza sentymentu:</strong> Klasyfikacja opinii/recenzji jako pozytywne lub negatywne.</li>
+                                    </ul>
+                                )}
+                                {module.id === 'nn' && (
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        <li><strong>Asystenci głosowi (Siri, Alexa):</strong> Rozpoznawanie mowy i przetwarzanie języka naturalnego do zrozumienia poleceń użytkownika.</li>
+                                        <li><strong>Pojazdy autonomiczne:</strong> Sieci neuronowe przetwarzają dane z kamer i czujników, aby rozpoznawać obiekty, znaki drogowe i podejmować decyzje o kierowaniu.</li>
+                                        <li><strong>Tłumaczenie maszynowe (Google Translate):</strong> Głębokie sieci neuronowe tłumaczą tekst między językami z rosnącą dokładnością.</li>
+                                        <li><strong>Analiza rynków finansowych:</strong> Przewidywanie cen akcji, wykrywanie wzorców handlowych i zarządzanie ryzykiem.</li>
+                                        <li><strong>Medycyna - analiza skanów:</strong> Wykrywanie nowotworów, anomalii i wspomaganie diagnostyki na podstawie obrazów medycznych.</li>
+                                        <li><strong>Systemy rekomendacji:</strong> Zaawansowane rekomendacje produktów, filmów, muzyki oparte na złożonych wzorcach zachowań użytkowników.</li>
+                                    </ul>
+                                )}
+                                {module.id === 'cnn' && (
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        <li><strong>Rozpoznawanie twarzy:</strong> Odblokowywanie telefonów (Face ID), tagowanie osób na zdjęciach w mediach społecznościowych, systemy bezpieczeństwa.</li>
+                                        <li><strong>Diagnostyka medyczna:</strong> Wykrywanie nowotworów na zdjęciach rentgenowskich, CT, MRI z dokładnością porównywalną lub wyższą niż radiolodzy.</li>
+                                        <li><strong>Pojazdy autonomiczne:</strong> Wykrywanie pieszych, pojazdów, znaków drogowych i linii jezdni w czasie rzeczywistym.</li>
+                                        <li><strong>Moderacja treści:</strong> Automatyczne wykrywanie i usuwanie nieodpowiednich obrazów/wideo na platformach społecznościowych.</li>
+                                        <li><strong>Rolnictwo precyzyjne:</strong> Analiza zdjęć satelitarnych i dronowych do monitorowania upraw, wykrywania chorób roślin i optymalizacji zbiorów.</li>
+                                        <li><strong>Rozszerzona rzeczywistość (AR):</strong> Śledzenie obiektów i nakładanie grafiki w aplikacjach AR (filtry Snapchat, Pokemon GO).</li>
+                                        <li><strong>OCR (Optical Character Recognition):</strong> Rozpoznawanie tekstu z obrazów - skanowanie dokumentów, wizytówek, tłumaczenie napisów z kamery.</li>
+                                    </ul>
+                                )}
+                            </Section>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+        
+        // --- APP ---
+        const App = () => {
+            const [activeModuleId, setActiveModuleId] = useState(null);
+            
+            if (!activeModuleId) {
+                return <HomePage onSelectAlgorithm={setActiveModuleId} />;
+            }
+            
+            const activeModule = algorithms.find(a => a.id === activeModuleId);
+
+            return (
+                <ModulePage 
+                    module={activeModule} 
+                    onSelectAlgorithm={setActiveModuleId}
+                    onGoHome={() => setActiveModuleId(null)}
+                />
+            );
+        };
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
