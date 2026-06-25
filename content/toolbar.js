@@ -49,46 +49,28 @@
       : [];
   }
 
+  // Scale one CSS property from the element's remembered original value, so
+  // repeated adjustments don't compound. Removes the override at scale 1.
+  function scaleProp(el, baseMap, cssomProp, cssProp, scale) {
+    if (!baseMap.has(el)) {
+      const v = parseFloat(getComputedStyle(el)[cssomProp]);
+      if (!isNaN(v)) baseMap.set(el, v);
+    }
+    const base = baseMap.get(el);
+    if (base == null) return;
+    if (scale === 1) {
+      el.style.removeProperty(cssProp);
+    } else {
+      el.style.setProperty(cssProp, round(base * scale) + "px", "important");
+    }
+  }
+
   function applyFontScaling(roots) {
     const elements = roots || scalableElements();
     elements.forEach((el) => {
       if (isOwnNode(el)) return;
-
-      // Font size
-      if (!baseFontSize.has(el)) {
-        const size = parseFloat(getComputedStyle(el).fontSize);
-        if (!isNaN(size)) baseFontSize.set(el, size);
-      }
-      const base = baseFontSize.get(el);
-      if (base != null) {
-        if (state.fontScale === 1) {
-          el.style.removeProperty("font-size");
-        } else {
-          el.style.setProperty(
-            "font-size",
-            round(base * state.fontScale) + "px",
-            "important"
-          );
-        }
-      }
-
-      // Line height
-      if (!baseLineHeight.has(el)) {
-        const lh = parseFloat(getComputedStyle(el).lineHeight);
-        if (!isNaN(lh)) baseLineHeight.set(el, lh);
-      }
-      const baseLh = baseLineHeight.get(el);
-      if (baseLh != null) {
-        if (state.lineScale === 1) {
-          el.style.removeProperty("line-height");
-        } else {
-          el.style.setProperty(
-            "line-height",
-            round(baseLh * state.lineScale) + "px",
-            "important"
-          );
-        }
-      }
+      scaleProp(el, baseFontSize, "fontSize", "font-size", state.fontScale);
+      scaleProp(el, baseLineHeight, "lineHeight", "line-height", state.lineScale);
     });
   }
 
@@ -106,40 +88,38 @@
 
   // --- Persistence -----------------------------------------------------------
 
-  function save() {
-    try {
-      chrome.storage.local.set({ [STORAGE_KEY]: state });
-    } catch (e) {
-      /* storage may be unavailable on some pages; ignore */
-    }
-  }
-
-  function load() {
+  // Promise-based wrappers over chrome.storage.local that never throw, so
+  // callers don't each need their own try/catch. storage can be unavailable
+  // on some pages (e.g. before the extension context is ready).
+  function storageGet(key) {
     return new Promise((resolve) => {
       try {
-        chrome.storage.local.get(STORAGE_KEY, (res) => {
-          if (res && res[STORAGE_KEY]) {
-            state = { ...DEFAULT_STATE, ...res[STORAGE_KEY] };
-          }
-          resolve();
-        });
+        chrome.storage.local.get(key, (res) => resolve((res && res[key]) || null));
       } catch (e) {
-        resolve();
+        resolve(null);
       }
     });
   }
 
-  // --- Actions ---------------------------------------------------------------
-
-  function setFontScale(scale) {
-    state.fontScale = clamp(scale);
-    applyFontScaling();
-    save();
-    syncButtons();
+  function storageSet(key, value) {
+    try {
+      chrome.storage.local.set({ [key]: value });
+    } catch (e) {
+      /* ignore */
+    }
   }
 
-  function setLineScale(scale) {
-    state.lineScale = clamp(scale);
+  const save = () => storageSet(STORAGE_KEY, state);
+
+  async function load() {
+    const saved = await storageGet(STORAGE_KEY);
+    if (saved) state = { ...DEFAULT_STATE, ...saved };
+  }
+
+  // --- Actions ---------------------------------------------------------------
+
+  function setScale(key, value) {
+    state[key] = clamp(value);
     applyFontScaling();
     save();
     syncButtons();
@@ -203,26 +183,26 @@
 
     row.appendChild(
       btn("A−", "Decrease font size", () =>
-        setFontScale(state.fontScale - STEP)
+        setScale("fontScale", state.fontScale - STEP)
       )
     );
     row.appendChild(
       btn("A+", "Increase font size", () =>
-        setFontScale(state.fontScale + STEP)
+        setScale("fontScale", state.fontScale + STEP)
       )
     );
     row.appendChild(
-      btn("Reset text", "Reset font size", () => setFontScale(1))
+      btn("Reset text", "Reset font size", () => setScale("fontScale", 1))
     );
 
     row.appendChild(
       btn("Line−", "Decrease line spacing", () =>
-        setLineScale(state.lineScale - STEP)
+        setScale("lineScale", state.lineScale - STEP)
       )
     );
     row.appendChild(
       btn("Line+", "Increase line spacing", () =>
-        setLineScale(state.lineScale + STEP)
+        setScale("lineScale", state.lineScale + STEP)
       )
     );
 
@@ -269,25 +249,8 @@
 
   let aiPanelEl, aiInput, aiKeyInput, aiApplyBtn, aiStatus;
 
-  function loadGeminiCfg() {
-    return new Promise((resolve) => {
-      try {
-        chrome.storage.local.get(GEMINI_STORE, (res) =>
-          resolve((res && res[GEMINI_STORE]) || {})
-        );
-      } catch (e) {
-        resolve({});
-      }
-    });
-  }
-
-  function saveGeminiCfg(cfg) {
-    try {
-      chrome.storage.local.set({ [GEMINI_STORE]: cfg });
-    } catch (e) {
-      /* ignore */
-    }
-  }
+  const loadGeminiCfg = async () => (await storageGet(GEMINI_STORE)) || {};
+  const saveGeminiCfg = (cfg) => storageSet(GEMINI_STORE, cfg);
 
   function buildAiPanel() {
     aiPanelEl = document.createElement("div");
@@ -354,14 +317,8 @@
   }
 
   function pageContext() {
-    let html = "";
-    try {
-      html = document.body ? document.body.innerHTML : "";
-    } catch (e) {
-      /* ignore */
-    }
-    const max = (window.__a11yGemini && window.__a11yGemini.MAX_HTML) || 6000;
-    if (html.length > max) html = html.slice(0, max) + "\n<!-- …truncated… -->";
+    // The Gemini client truncates the HTML to a safe size.
+    const html = (document.body && document.body.innerHTML) || "";
     return { url: location.href, title: document.title, html };
   }
 
@@ -501,19 +458,9 @@
 
   function listenForPopup() {
     if (!chrome.runtime || !chrome.runtime.onMessage) return;
-    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (!msg || !msg.type) return;
-      switch (msg.type) {
-        case "a11y-show":
-          setHidden(false);
-          break;
-        case "a11y-reset":
-          resetAll();
-          break;
-        case "a11y-get-state":
-          sendResponse(state);
-          return; // synchronous response
-      }
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg?.type === "a11y-show") setHidden(false);
+      else if (msg?.type === "a11y-reset") resetAll();
     });
   }
 
