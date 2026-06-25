@@ -1,5 +1,5 @@
 /*
- * Accessibility Toolbar — content script.
+ * Accessibility Toolbar - content script.
  *
  * Injects a fixed toolbar at the top of every page that lets the user adjust
  * font size, line spacing, font family and contrast. Settings are persisted
@@ -245,7 +245,7 @@
 
   // --- AI panel (Gemini) -----------------------------------------------------
 
-  const GEMINI_STORE = "a11y:gemini"; // global (not per-host) — holds the API key
+  const GEMINI_STORE = "a11y:gemini"; // global (not per-host) - holds the API key
 
   let aiPanelEl, aiInput, aiKeyInput, aiApplyBtn, aiStatus;
 

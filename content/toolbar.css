@@ -1,4 +1,4 @@
-/* Accessibility Toolbar — injected styles.
+/* Accessibility Toolbar - injected styles.
    All selectors are namespaced under #a11y-toolbar to avoid clashing with the host page.
    Values use !important because host pages frequently set aggressive global styles. */
 
@@ -9,7 +9,7 @@
   right: 0 !important;
   width: 100% !important;
   box-sizing: border-box !important;
-  z-index: 2147483647 !important; /* max — sit above everything on the page */
+  z-index: 2147483647 !important; /* max - sit above everything on the page */
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
