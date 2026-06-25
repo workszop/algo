@@ -155,6 +155,9 @@
   function resetAll() {
     state = { ...DEFAULT_STATE, hidden: state.hidden };
     applyAll();
+    // Remove styling injected by AI requests (structural DOM edits need a reload).
+    const aiStyle = document.getElementById("a11y-ai-style");
+    if (aiStyle) aiStyle.remove();
     save();
     syncButtons();
   }
@@ -190,60 +193,228 @@
     toolbarEl.setAttribute("role", "toolbar");
     toolbarEl.setAttribute("aria-label", "Accessibility toolbar");
 
+    const row = document.createElement("div");
+    row.className = "a11y-row";
+
     const label = document.createElement("span");
     label.className = "a11y-label";
     label.textContent = "Accessibility";
-    toolbarEl.appendChild(label);
+    row.appendChild(label);
 
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("A−", "Decrease font size", () =>
         setFontScale(state.fontScale - STEP)
       )
     );
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("A+", "Increase font size", () =>
         setFontScale(state.fontScale + STEP)
       )
     );
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("Reset text", "Reset font size", () => setFontScale(1))
     );
 
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("Line−", "Decrease line spacing", () =>
         setLineScale(state.lineScale - STEP)
       )
     );
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("Line+", "Increase line spacing", () =>
         setLineScale(state.lineScale + STEP)
       )
     );
 
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("Readable font", "Toggle a clearer, dyslexia-friendly font", () =>
         toggle("readableFont")
       )
     ).dataset.key = "readableFont";
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("High contrast", "Toggle high contrast", () =>
         toggle("highContrast")
       )
     ).dataset.key = "highContrast";
-    toolbarEl.appendChild(
+    row.appendChild(
       btn("Dark mode", "Toggle dark / inverted mode", () => toggle("darkMode"))
     ).dataset.key = "darkMode";
 
+    const aiBtn = btn(
+      "✨ AI",
+      "Make AI-powered changes with Gemini",
+      toggleAiPanel
+    );
+    aiBtn.id = "a11y-ai-btn";
+    row.appendChild(aiBtn);
+
     const spacer = document.createElement("span");
     spacer.className = "a11y-spacer";
-    toolbarEl.appendChild(spacer);
+    row.appendChild(spacer);
 
-    toolbarEl.appendChild(btn("Reset all", "Reset all changes", resetAll));
-    toolbarEl.appendChild(
+    row.appendChild(btn("Reset all", "Reset all changes", resetAll));
+    row.appendChild(
       btn("✕", "Hide toolbar", () => setHidden(true), "a11y-close")
     );
 
+    toolbarEl.appendChild(row);
+    toolbarEl.appendChild(buildAiPanel());
+
     document.documentElement.appendChild(toolbarEl);
+  }
+
+  // --- AI panel (Gemini) -----------------------------------------------------
+
+  const GEMINI_STORE = "a11y:gemini"; // global (not per-host) — holds the API key
+
+  let aiPanelEl, aiInput, aiKeyInput, aiApplyBtn, aiStatus;
+
+  function loadGeminiCfg() {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(GEMINI_STORE, (res) =>
+          resolve((res && res[GEMINI_STORE]) || {})
+        );
+      } catch (e) {
+        resolve({});
+      }
+    });
+  }
+
+  function saveGeminiCfg(cfg) {
+    try {
+      chrome.storage.local.set({ [GEMINI_STORE]: cfg });
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function buildAiPanel() {
+    aiPanelEl = document.createElement("div");
+    aiPanelEl.id = "a11y-ai-panel";
+
+    aiInput = document.createElement("textarea");
+    aiInput.id = "a11y-ai-input";
+    aiInput.rows = 2;
+    aiInput.placeholder =
+      "Describe the changes you want Gemini to make to this page… " +
+      "(e.g. “use a dark background, enlarge the headings and hide the sidebar”)";
+    aiInput.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        runAi();
+      }
+    });
+
+    const controls = document.createElement("div");
+    controls.className = "a11y-ai-controls";
+
+    aiKeyInput = document.createElement("input");
+    aiKeyInput.id = "a11y-ai-key";
+    aiKeyInput.type = "password";
+    aiKeyInput.placeholder = "Gemini API key";
+    aiKeyInput.autocomplete = "off";
+    aiKeyInput.spellcheck = false;
+
+    aiApplyBtn = btn("Apply", "Send to Gemini and apply the changes", runAi);
+    aiApplyBtn.id = "a11y-ai-apply";
+
+    controls.appendChild(aiKeyInput);
+    controls.appendChild(aiApplyBtn);
+
+    aiStatus = document.createElement("span");
+    aiStatus.id = "a11y-ai-status";
+
+    aiPanelEl.appendChild(aiInput);
+    aiPanelEl.appendChild(controls);
+    aiPanelEl.appendChild(aiStatus);
+
+    // Pre-fill the saved key (stored once, reused across sites).
+    loadGeminiCfg().then((cfg) => {
+      if (cfg.apiKey) aiKeyInput.value = cfg.apiKey;
+    });
+
+    return aiPanelEl;
+  }
+
+  function toggleAiPanel() {
+    if (!aiPanelEl) return;
+    const open = !aiPanelEl.classList.contains("open");
+    aiPanelEl.classList.toggle("open", open);
+    const aiBtn = document.getElementById("a11y-ai-btn");
+    if (aiBtn) aiBtn.classList.toggle("a11y-active", open);
+    if (open) aiInput.focus();
+    updateOffset();
+  }
+
+  function setAiStatus(text, kind) {
+    if (!aiStatus) return;
+    aiStatus.textContent = text || "";
+    aiStatus.dataset.kind = kind || "";
+  }
+
+  function pageContext() {
+    let html = "";
+    try {
+      html = document.body ? document.body.innerHTML : "";
+    } catch (e) {
+      /* ignore */
+    }
+    const max = (window.__a11yGemini && window.__a11yGemini.MAX_HTML) || 6000;
+    if (html.length > max) html = html.slice(0, max) + "\n<!-- …truncated… -->";
+    return { url: location.href, title: document.title, html };
+  }
+
+  // Execute Gemini's code in the content-script isolated world. The DOM is
+  // shared with the page, so manipulations take effect immediately.
+  function applyAiCode(code) {
+    try {
+      // eslint-disable-next-line no-new-func
+      new Function(code)();
+    } catch (e) {
+      throw new Error("Generated code failed: " + (e.message || e));
+    }
+  }
+
+  async function runAi() {
+    if (!window.__a11yGemini) {
+      setAiStatus("Gemini client failed to load.", "error");
+      return;
+    }
+    const requirement = (aiInput.value || "").trim();
+    const apiKey = (aiKeyInput.value || "").trim();
+    if (!requirement) {
+      setAiStatus("Describe what you'd like to change.", "error");
+      aiInput.focus();
+      return;
+    }
+    if (!apiKey) {
+      setAiStatus("Enter your Gemini API key.", "error");
+      aiKeyInput.focus();
+      return;
+    }
+
+    const cfg = await loadGeminiCfg();
+    cfg.apiKey = apiKey; // persist the key for reuse
+    saveGeminiCfg(cfg);
+
+    setAiStatus("Asking Gemini…", "busy");
+    aiApplyBtn.disabled = true;
+    try {
+      const code = await window.__a11yGemini.generate({
+        apiKey,
+        model: cfg.model,
+        requirement,
+        context: pageContext(),
+      });
+      if (!code) throw new Error("Gemini returned no code.");
+      applyAiCode(code);
+      setAiStatus("Changes applied. Reload the page to undo them.", "ok");
+    } catch (err) {
+      setAiStatus(err.message || String(err), "error");
+    } finally {
+      aiApplyBtn.disabled = false;
+    }
   }
 
   function buildHandle() {
@@ -259,13 +430,23 @@
     document.documentElement.appendChild(handleEl);
   }
 
+  // Offset the page so the fixed bar (which grows when the AI panel opens)
+  // doesn't cover the top of the content.
+  function updateOffset() {
+    if (!toolbarEl) return;
+    const offset = state.hidden ? "" : toolbarEl.offsetHeight + "px";
+    document.documentElement.style.setProperty(
+      "margin-top",
+      offset,
+      "important"
+    );
+  }
+
   function renderVisibility() {
     if (!toolbarEl) return;
     toolbarEl.classList.toggle("a11y-hidden", state.hidden);
     if (handleEl) handleEl.style.display = state.hidden ? "block" : "none";
-    // Offset the page so the fixed bar doesn't cover the top of the content.
-    const offset = state.hidden ? "" : toolbarEl.offsetHeight + "px";
-    document.documentElement.style.setProperty("margin-top", offset, "important");
+    updateOffset();
   }
 
   function syncButtons() {
