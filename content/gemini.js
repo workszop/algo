@@ -11,68 +11,71 @@
 (() => {
   "use strict";
 
-  const DEFAULT_MODEL = "gemini-2.5-flash";
+  const DEFAULT_MODEL = "gemini-3.5-flash";
   const MAX_HTML = 6000; // characters of page HTML sent as context
 
-  function endpoint(model, apiKey) {
-    return (
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(model || DEFAULT_MODEL) +
-      ":generateContent?key=" +
-      encodeURIComponent(apiKey)
-    );
-  }
+  // Behaviour rules sent once as the system instruction, separate from the
+  // per-request user prompt below.
+  const SYSTEM_INSTRUCTION = [
+    "You are a DOM-manipulation assistant embedded in a browser extension.",
+    "Generate JavaScript that, when executed on the current web page, applies",
+    "the user's requested changes by manipulating the live DOM (document,",
+    "document.body, document.querySelectorAll, etc.).",
+    "",
+    "Rules:",
+    "- Output ONLY raw JavaScript: no markdown, no code fences, no comments,",
+    "  no explanations.",
+    "- Never use import/export, top-level return, fetch, XMLHttpRequest or any",
+    "  network request, and never navigate or reload the page.",
+    '- Put styling in a single reusable <style id="a11y-ai-style"> element',
+    "  appended to <head>, so the changes can be cleanly removed later.",
+    "- Edit the DOM directly for structural changes.",
+    "- Make all code idempotent: safe to run more than once without duplicating",
+    "  elements.",
+    '- Never touch elements whose id starts with "a11y-toolbar".',
+  ].join("\n");
 
-  function buildPrompt(requirement, context) {
+  function buildUserPrompt(requirement, { url, title, html }) {
+    const snippet =
+      html.length > MAX_HTML
+        ? html.slice(0, MAX_HTML) + "\n<!-- …truncated… -->"
+        : html;
     return [
-      "You are a DOM-manipulation assistant embedded in a browser extension.",
-      "Generate JavaScript that, when executed in the context of the current",
-      "web page, applies the user's requested changes by manipulating the live",
-      "DOM (document, document.body, document.querySelectorAll, etc.).",
-      "",
-      "Strict rules:",
-      "- Output ONLY raw JavaScript. No markdown, no code fences, no comments,",
-      "  no explanations.",
-      "- Do NOT use import/export, top-level return, fetch, XMLHttpRequest, or",
-      "  any network request. Do NOT navigate or reload the page.",
-      "- For styling changes, create or reuse a single",
-      '  <style id="a11y-ai-style"> element appended to <head> and put your CSS',
-      "  there, so the changes can be cleanly removed later.",
-      "- For structural changes, edit the DOM directly.",
-      "- Make the code idempotent: safe to run more than once without",
-      "  duplicating elements.",
-      "- Do not touch elements with ids starting with 'a11y-toolbar'.",
-      "",
-      "Page URL: " + context.url,
-      "Page title: " + context.title,
+      "Page URL: " + url,
+      "Page title: " + title,
       "",
       "Truncated page HTML for reference:",
-      context.html,
+      snippet,
       "",
       "User requirement:",
       requirement,
     ].join("\n");
   }
 
+  // Gemini is asked for raw JS, but strip code fences defensively in case it
+  // wraps the output in ```js … ``` anyway.
   function stripFences(text) {
-    let t = (text || "").trim();
-    const fenced = t.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n```$/);
-    if (fenced) return fenced[1].trim();
-    // Defensive: strip stray leading/trailing fences if the regex above missed.
-    t = t.replace(/^```[a-zA-Z]*\s*\n?/, "").replace(/\n?```$/, "");
-    return t.trim();
+    const t = (text || "").trim();
+    const fenced = t.match(/^```[a-zA-Z]*\n?([\s\S]*?)\n?```$/);
+    return (fenced ? fenced[1] : t).trim();
   }
 
   async function generate({ apiKey, model, requirement, context }) {
-    const res = await fetch(endpoint(model, apiKey), {
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model || DEFAULT_MODEL) +
+      ":generateContent";
+
+    const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
         contents: [
-          {
-            role: "user",
-            parts: [{ text: buildPrompt(requirement, context) }],
-          },
+          { role: "user", parts: [{ text: buildUserPrompt(requirement, context) }] },
         ],
         generationConfig: { temperature: 0.2 },
       }),
@@ -81,13 +84,12 @@
     if (!res.ok) {
       let detail = "";
       try {
-        const body = await res.json();
-        detail = (body && body.error && body.error.message) || "";
+        detail = (await res.json())?.error?.message || "";
       } catch (e) {
-        /* ignore */
+        /* response body wasn't JSON; ignore */
       }
-      if (res.status === 400 || res.status === 403) {
-        detail = detail || "check that your API key is valid.";
+      if (!detail && (res.status === 400 || res.status === 403)) {
+        detail = "check that your API key is valid";
       }
       throw new Error(
         "Gemini API error " + res.status + (detail ? ": " + detail : "")
@@ -95,16 +97,9 @@
     }
 
     const data = await res.json();
-    const parts =
-      (data &&
-        data.candidates &&
-        data.candidates[0] &&
-        data.candidates[0].content &&
-        data.candidates[0].content.parts) ||
-      [];
-    const text = parts.map((p) => p.text || "").join("");
-    return stripFences(text);
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    return stripFences(parts.map((p) => p.text || "").join(""));
   }
 
-  window.__a11yGemini = { generate, DEFAULT_MODEL, MAX_HTML };
+  window.__a11yGemini = { generate, DEFAULT_MODEL };
 })();
