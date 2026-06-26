@@ -140,28 +140,10 @@
   gap: 8px !important;
 }
 
-#a11y-ai-key {
-  all: unset;
-  box-sizing: border-box !important;
-  flex: 1 1 auto !important;
-  height: 30px !important;
-  padding: 0 10px !important;
-  border: 1px solid #3e4c59 !important;
-  border-radius: 6px !important;
-  background: #0f1720 !important;
-  color: #fff !important;
-  font-family: inherit !important;
-  font-size: 13px !important;
-}
-
-#a11y-ai-key::placeholder {
-  color: #7b8794 !important;
-}
-
 #a11y-ai-model {
   all: unset;
   box-sizing: border-box !important;
-  flex: 0 0 auto !important;
+  flex: 1 1 auto !important;
   height: 30px !important;
   padding: 0 8px !important;
   border: 1px solid #3e4c59 !important;
