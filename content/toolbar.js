@@ -548,7 +548,16 @@
   function renderVisibility() {
     if (!toolbarEl) return;
     toolbarEl.classList.toggle("a11y-hidden", state.hidden);
-    if (handleEl) handleEl.style.display = state.hidden ? "block" : "none";
+    // The handle's base CSS sets `display: inline-flex !important` (to lay out
+    // the Q-mark + label), so toggling visibility needs an !important inline
+    // style to win - otherwise the handle stays visible and overlaps the bar.
+    if (handleEl) {
+      handleEl.style.setProperty(
+        "display",
+        state.hidden ? "inline-flex" : "none",
+        "important"
+      );
+    }
     if (state.hidden) toggleAiPanel(false); // hide the floating box with the bar
     updateOffset();
   }
