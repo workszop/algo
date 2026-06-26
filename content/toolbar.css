@@ -182,18 +182,33 @@
 }
 
 #a11y-ai-model {
-  all: unset;
   box-sizing: border-box !important;
   flex: 1 1 auto !important;
+  width: auto !important;
   height: 44px !important;
-  padding: 0 12px !important;
+  margin: 0 !important;
+  /* room on the right for the custom chevron */
+  padding: 0 38px 0 12px !important;
   border: 1px solid #3e4c59 !important;
   border-radius: 8px !important;
-  background: #0f1720 !important;
   color: #fff !important;
   font-family: inherit !important;
   font-size: 16px !important;
+  /* vertically centre the selected text */
+  line-height: 42px !important;
+  text-align: left !important;
+  text-align-last: left !important;
+  vertical-align: middle !important;
   cursor: pointer !important;
+  /* hide the native control and draw our own dropdown arrow */
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-color: #0f1720 !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23cbd2d9' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 14px 14px !important;
 }
 
 #a11y-ai-model option {
