@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Accessibility Toolbar",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Adds a toolbar at the top of any website to adjust font size, line spacing, contrast and more - including AI-powered changes via Gemini.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["https://generativelanguage.googleapis.com/*"],

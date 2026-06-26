@@ -249,7 +249,7 @@
     { value: "gemini-3.5-flash-lite", label: "Lite" },
   ];
 
-  let aiPanelEl, aiInput, aiKeyInput, aiModelSelect, aiApplyBtn, aiStatus;
+  let aiPanelEl, aiInput, aiModelSelect, aiApplyBtn, aiStatus;
 
   const loadGeminiCfg = async () => (await storageGet(GEMINI_STORE)) || {};
   const saveGeminiCfg = (cfg) => storageSet(GEMINI_STORE, cfg);
@@ -274,13 +274,6 @@
     const controls = document.createElement("div");
     controls.className = "a11y-ai-controls";
 
-    aiKeyInput = document.createElement("input");
-    aiKeyInput.id = "a11y-ai-key";
-    aiKeyInput.type = "password";
-    aiKeyInput.placeholder = "Gemini API key";
-    aiKeyInput.autocomplete = "off";
-    aiKeyInput.spellcheck = false;
-
     aiModelSelect = document.createElement("select");
     aiModelSelect.id = "a11y-ai-model";
     aiModelSelect.title = "Gemini model";
@@ -300,7 +293,6 @@
     aiApplyBtn = btn("Apply", "Send to Gemini and apply the changes", runAi);
     aiApplyBtn.id = "a11y-ai-apply";
 
-    controls.appendChild(aiKeyInput);
     controls.appendChild(aiModelSelect);
     controls.appendChild(aiApplyBtn);
 
@@ -311,9 +303,9 @@
     aiPanelEl.appendChild(controls);
     aiPanelEl.appendChild(aiStatus);
 
-    // Pre-fill the saved key and model (stored once, reused across sites).
+    // Restore the saved model choice. The API key is managed separately in the
+    // extension popup, so it isn't shown here.
     loadGeminiCfg().then((cfg) => {
-      if (cfg.apiKey) aiKeyInput.value = cfg.apiKey;
       aiModelSelect.value = cfg.model || GEMINI_MODELS[0].value;
     });
 
@@ -359,22 +351,23 @@
       return;
     }
     const requirement = (aiInput.value || "").trim();
-    const apiKey = (aiKeyInput.value || "").trim();
     if (!requirement) {
       setAiStatus("Describe what you'd like to change.", "error");
       aiInput.focus();
       return;
     }
-    if (!apiKey) {
-      setAiStatus("Enter your Gemini API key.", "error");
-      aiKeyInput.focus();
-      return;
-    }
 
     const model = aiModelSelect.value;
     const cfg = await loadGeminiCfg();
-    cfg.apiKey = apiKey; // persist the key and model for reuse
-    cfg.model = model;
+    const apiKey = (cfg.apiKey || "").trim();
+    if (!apiKey) {
+      setAiStatus(
+        "Add your Gemini API key in the extension popup (toolbar icon) first.",
+        "error"
+      );
+      return;
+    }
+    cfg.model = model; // remember the model choice
     saveGeminiCfg(cfg);
 
     setAiStatus("Asking Gemini…", "busy");

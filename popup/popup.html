@@ -17,6 +17,30 @@
       <button id="reset">Reset this page</button>
     </div>
     <p id="status" class="status"></p>
+
+    <hr class="divider" />
+
+    <h2>AI (Gemini)</h2>
+    <p class="hint">
+      Add your Gemini API key once to enable the toolbar's <strong>AI</strong>
+      button. Get a key from
+      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
+        >Google AI Studio</a
+      >. It is stored locally in your browser and only sent to Google's Gemini
+      API.
+    </p>
+    <div class="field">
+      <input
+        id="api-key"
+        type="password"
+        placeholder="Gemini API key"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="save-key">Save</button>
+    </div>
+    <p id="key-status" class="status"></p>
+
     <script src="popup.js"></script>
   </body>
 </html>
