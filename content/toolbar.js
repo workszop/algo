@@ -8,9 +8,29 @@
 (() => {
   "use strict";
 
-  // Avoid double-injection if the script runs twice (e.g. SPA navigations).
-  if (window.__a11yToolbarInjected) return;
-  window.__a11yToolbarInjected = true;
+  // Version of this instance. When the extension is updated and re-injected
+  // (see background.js), a newer instance claims ownership by overwriting
+  // window.__a11yToolbarVersion; older instances notice they're no longer
+  // current via isCurrent() and stand down. This is what stops a stale toolbar
+  // from lingering in tabs that were open during an update.
+  const VERSION = (() => {
+    try {
+      return chrome.runtime.getManifest().version;
+    } catch (e) {
+      return "dev";
+    }
+  })();
+  window.__a11yToolbarVersion = VERSION;
+  const isCurrent = () => window.__a11yToolbarVersion === VERSION;
+
+  // Remove any toolbar UI left over from a previous (or older) instance so the
+  // freshest version is the only one on the page.
+  function removeExistingUI() {
+    ["a11y-toolbar", "a11y-toolbar-handle", "a11y-ai-panel"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
+  }
 
   const STEP = 0.1; // font/line-height adjustment per click (10%)
   const MIN_SCALE = 0.5;
@@ -37,7 +57,10 @@
   const clamp = (n) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, round(n)));
 
   function isOwnNode(el) {
-    return el.closest && el.closest("#a11y-toolbar, #a11y-toolbar-handle");
+    return (
+      el.closest &&
+      el.closest("#a11y-toolbar, #a11y-toolbar-handle, #a11y-ai-panel")
+    );
   }
 
   function scalableElements() {
@@ -234,9 +257,11 @@
     );
 
     toolbarEl.appendChild(row);
-    toolbarEl.appendChild(buildAiPanel());
-
     document.documentElement.appendChild(toolbarEl);
+
+    // The AI panel is a floating box appended to <html> directly (not nested
+    // in the bar), so its fixed positioning is relative to the viewport.
+    buildAiPanel();
   }
 
   // --- AI panel (Gemini) -----------------------------------------------------
@@ -245,8 +270,9 @@
 
   // Selectable Gemini models; the first is the default.
   const GEMINI_MODELS = [
-    { value: "gemini-3.5-flash", label: "Flash" },
-    { value: "gemini-3.5-flash-lite", label: "Lite" },
+    { value: "gemini-3.5-flash", label: "Flash (latest)" },
+    { value: "gemini-3.5-flash-lite", label: "Lite (latest)" },
+    { value: "gemini-2.5-flash", label: "Flash 2.5" },
   ];
 
   let aiPanelEl, aiInput, aiModelSelect, aiApplyBtn, aiStatus;
@@ -257,13 +283,25 @@
   function buildAiPanel() {
     aiPanelEl = document.createElement("div");
     aiPanelEl.id = "a11y-ai-panel";
+    aiPanelEl.setAttribute("role", "dialog");
+    aiPanelEl.setAttribute("aria-label", "AI accessibility assistant");
+
+    const header = document.createElement("div");
+    header.className = "a11y-ai-header";
+    const title = document.createElement("span");
+    title.className = "a11y-ai-title";
+    title.textContent = "AI accessibility assistant";
+    header.appendChild(title);
+    header.appendChild(
+      btn("✕", "Close", () => toggleAiPanel(false), "a11y-ai-x")
+    );
 
     aiInput = document.createElement("textarea");
     aiInput.id = "a11y-ai-input";
-    aiInput.rows = 2;
+    aiInput.rows = 3;
     aiInput.placeholder =
-      "Describe the changes you want Gemini to make to this page… " +
-      "(e.g. “use a dark background, enlarge the headings and hide the sidebar”)";
+      "Describe how to make this page easier to use… " +
+      "(e.g. “use a dark background, enlarge the body text and increase spacing”)";
     aiInput.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
@@ -299,27 +337,27 @@
     aiStatus = document.createElement("span");
     aiStatus.id = "a11y-ai-status";
 
+    aiPanelEl.appendChild(header);
     aiPanelEl.appendChild(aiInput);
     aiPanelEl.appendChild(controls);
     aiPanelEl.appendChild(aiStatus);
+    document.documentElement.appendChild(aiPanelEl);
 
     // Restore the saved model choice. The API key is managed separately in the
     // extension popup, so it isn't shown here.
     loadGeminiCfg().then((cfg) => {
       aiModelSelect.value = cfg.model || GEMINI_MODELS[0].value;
     });
-
-    return aiPanelEl;
   }
 
-  function toggleAiPanel() {
+  // Pass a boolean to force a state, or omit to toggle.
+  function toggleAiPanel(force) {
     if (!aiPanelEl) return;
-    const open = !aiPanelEl.classList.contains("open");
+    const open = typeof force === "boolean" ? force : !aiPanelEl.classList.contains("open");
     aiPanelEl.classList.toggle("open", open);
     const aiBtn = document.getElementById("a11y-ai-btn");
     if (aiBtn) aiBtn.classList.toggle("a11y-active", open);
     if (open) aiInput.focus();
-    updateOffset();
   }
 
   function setAiStatus(text, kind) {
@@ -418,6 +456,7 @@
     if (!toolbarEl) return;
     toolbarEl.classList.toggle("a11y-hidden", state.hidden);
     if (handleEl) handleEl.style.display = state.hidden ? "block" : "none";
+    if (state.hidden) toggleAiPanel(false); // hide the floating box with the bar
     updateOffset();
   }
 
@@ -434,6 +473,7 @@
   let scheduled = false;
 
   function scheduleScale(nodes) {
+    if (!isCurrent()) return;
     if (state.fontScale === 1 && state.lineScale === 1) return;
     nodes.forEach((n) => pending.push(n));
     if (scheduled) return;
@@ -457,6 +497,10 @@
 
   function observeMutations() {
     const observer = new MutationObserver((mutations) => {
+      if (!isCurrent()) {
+        observer.disconnect(); // a newer instance has taken over
+        return;
+      }
       const added = [];
       mutations.forEach((m) => {
         m.addedNodes.forEach((n) => added.push(n));
@@ -474,6 +518,7 @@
   function listenForPopup() {
     if (!chrome.runtime || !chrome.runtime.onMessage) return;
     chrome.runtime.onMessage.addListener((msg) => {
+      if (!isCurrent()) return; // only the newest instance handles popup actions
       if (msg?.type === "a11y-show") setHidden(false);
       else if (msg?.type === "a11y-reset") resetAll();
     });
@@ -482,6 +527,7 @@
   // --- Init ------------------------------------------------------------------
 
   async function init() {
+    removeExistingUI(); // drop any toolbar from a previous/older instance
     await load();
     buildToolbar();
     buildHandle();

@@ -100,33 +100,74 @@
   cursor: default !important;
 }
 
-/* ---- AI panel ---- */
+/* ---- AI panel: a floating box, not a full-width strip ---- */
 #a11y-ai-panel {
   display: none;
+  position: fixed !important;
+  top: 64px !important;
+  right: 20px !important;
+  width: 440px !important;
+  max-width: calc(100vw - 40px) !important;
+  max-height: calc(100vh - 84px) !important;
+  overflow: auto !important;
+  box-sizing: border-box !important;
+  z-index: 2147483647 !important;
   flex-direction: column !important;
-  gap: 8px !important;
-  padding: 10px !important;
-  border-top: 1px solid #3e4c59 !important;
+  gap: 14px !important;
+  padding: 18px !important;
+  border: 1px solid #3e4c59 !important;
+  border-radius: 12px !important;
   background: #16202a !important;
+  color: #fff !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 17px !important;
+  line-height: 1.4 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
 }
 
 #a11y-ai-panel.open {
   display: flex !important;
 }
 
+#a11y-ai-panel .a11y-ai-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+#a11y-ai-panel .a11y-ai-title {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+#a11y-ai-panel button.a11y-ai-x {
+  all: unset;
+  cursor: pointer !important;
+  font-size: 20px !important;
+  line-height: 1 !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  color: #cbd2d9 !important;
+}
+
+#a11y-ai-panel button.a11y-ai-x:hover {
+  background: #3e4c59 !important;
+  color: #fff !important;
+}
+
 #a11y-ai-input {
   all: unset;
   box-sizing: border-box !important;
   width: 100% !important;
-  min-height: 44px !important;
-  padding: 8px 10px !important;
+  min-height: 90px !important;
+  padding: 12px 14px !important;
   border: 1px solid #3e4c59 !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
   background: #0f1720 !important;
   color: #fff !important;
   font-family: inherit !important;
-  font-size: 13px !important;
-  line-height: 1.4 !important;
+  font-size: 17px !important;
+  line-height: 1.5 !important;
   resize: vertical !important;
 }
 
@@ -137,21 +178,21 @@
 #a11y-ai-panel .a11y-ai-controls {
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 10px !important;
 }
 
 #a11y-ai-model {
   all: unset;
   box-sizing: border-box !important;
   flex: 1 1 auto !important;
-  height: 30px !important;
-  padding: 0 8px !important;
+  height: 44px !important;
+  padding: 0 12px !important;
   border: 1px solid #3e4c59 !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
   background: #0f1720 !important;
   color: #fff !important;
   font-family: inherit !important;
-  font-size: 13px !important;
+  font-size: 16px !important;
   cursor: pointer !important;
 }
 
@@ -160,17 +201,36 @@
   background: #16202a !important;
 }
 
-#a11y-ai-apply {
+#a11y-ai-panel #a11y-ai-apply {
+  all: unset;
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 44px !important;
+  padding: 0 22px !important;
+  border-radius: 8px !important;
+  font-family: inherit !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #fff !important;
   background: #2bb673 !important;
+  cursor: pointer !important;
 }
 
-#a11y-ai-apply:hover {
+#a11y-ai-panel #a11y-ai-apply:hover {
   background: #29a869 !important;
 }
 
+#a11y-ai-panel #a11y-ai-apply:disabled {
+  opacity: 0.6 !important;
+  cursor: default !important;
+}
+
 #a11y-ai-status {
-  font-size: 12px !important;
-  min-height: 14px !important;
+  font-size: 15px !important;
+  min-height: 18px !important;
   color: #9aa5b1 !important;
 }
 

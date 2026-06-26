@@ -45,12 +45,17 @@ is validated against the Gemini API on save and only stored if it's accepted. It
 is kept locally in `chrome.storage.local`, reused across sites, and only ever
 sent to Google's Gemini endpoint.
 
-**Using it** - click **AI** in the toolbar to open the AI panel:
+**Using it** - click **AI** in the toolbar to open the AI panel, a floating box
+with large, readable text:
 
-1. Pick a **model** - *Flash* (`gemini-3.5-flash`, higher quality) or *Lite*
-   (`gemini-3.5-flash-lite`, faster and cheaper). The choice is remembered.
+1. Pick a **model**:
+   - *Flash (latest)* - `gemini-3.5-flash`, highest quality
+   - *Lite (latest)* - `gemini-3.5-flash-lite`, faster and cheaper
+   - *Flash 2.5* - `gemini-2.5-flash`, the previous generation
+
+   The choice is remembered.
 2. Type what you want in plain language, e.g. *"use a dark background, enlarge
-   the headings and hide the sidebar"*.
+   the body text and increase spacing"*.
 3. Press **Apply** (or `Ctrl`/`Cmd` + `Enter`).
 
 The API key lives in the popup, so the in-page panel only shows the model and
@@ -83,12 +88,14 @@ Notes:
 
 ```
 manifest.json          Extension manifest (MV3)
+background.js          Service worker; re-injects the latest scripts into
+                       open tabs on install/update
 content/
   gemini.js            Gemini API client (builds the prompt, returns DOM code)
   toolbar.js           Injected toolbar UI + page-adjustment & AI logic
   toolbar.css          Toolbar, AI panel and page-effect styles
 popup/
-  popup.html/.css/.js  Extension popup (show / reset)
+  popup.html/.css/.js  Extension popup (show / reset / API key)
 icons/                 Extension icons (16/48/128 px)
 ```
 
@@ -98,3 +105,7 @@ icons/                 Extension icons (16/48/128 px)
   Web Store, etc.), so the toolbar won't appear there.
 - Dark mode and high contrast use CSS `filter`, which applies to the whole page;
   media elements are re-inverted so photos and videos still look correct.
+- **Staying up to date:** when the extension updates, a background worker
+  re-injects the newest version into already-open tabs, and each page's content
+  script removes any older toolbar via a version token - so you won't see an old
+  toolbar on some tabs and a new one on others.
