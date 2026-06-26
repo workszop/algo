@@ -340,28 +340,31 @@
   color: var(--q-info) !important;
 }
 
-/* Floating "show" handle shown when the bar is collapsed. */
+/* Floating "show" handle shown when the bar is collapsed - a self-contained,
+   fully-bordered pill button so it reads clearly as a control. */
 #a11y-toolbar-handle {
   position: fixed !important;
-  top: 0 !important;
+  top: 12px !important;
   right: 16px !important;
   z-index: 2147483647 !important;
   display: inline-flex !important;
   align-items: center !important;
-  gap: 7px !important;
+  gap: 8px !important;
   background: var(--q-ink) !important;
   color: var(--q-white) !important;
-  border: none !important;
-  border-bottom: 2px solid var(--q-pink) !important;
-  border-radius: 0 0 8px 8px !important;
-  padding: 6px 12px !important;
+  border: 1.5px solid var(--q-pink) !important;
+  border-radius: 8px !important;
+  padding: 8px 14px !important;
   font-family: var(--q-font-mono) !important;
   font-size: 12px !important;
   font-weight: 500 !important;
   letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
   cursor: pointer !important;
-  box-shadow: 0 4px 12px rgba(17, 17, 17, 0.28) !important;
+  box-shadow: 0 6px 18px rgba(17, 17, 17, 0.28),
+    0 2px 8px rgba(196, 30, 84, 0.18) !important;
+  transition: background 0.12s cubic-bezier(0.2, 0.6, 0.2, 1),
+    border-color 0.12s cubic-bezier(0.2, 0.6, 0.2, 1) !important;
 }
 
 #a11y-toolbar-handle img {
@@ -372,6 +375,12 @@
 
 #a11y-toolbar-handle:hover {
   background: var(--q-ink-2) !important;
+  border-color: var(--q-rose) !important;
+}
+
+#a11y-toolbar-handle:focus-visible {
+  outline: 2px solid var(--q-rose) !important;
+  outline-offset: 2px !important;
 }
 
 /* ---- Page-level effects applied to <html> ---- */
