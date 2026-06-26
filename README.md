@@ -41,7 +41,8 @@ overrides entirely.
 **One-time setup** - click the extension icon to open the popup and paste your
 **Gemini API key** (get one from
 [Google AI Studio](https://aistudio.google.com/apikey)), then **Save**. The key
-is stored locally in `chrome.storage.local`, reused across sites, and only ever
+is validated against the Gemini API on save and only stored if it's accepted. It
+is kept locally in `chrome.storage.local`, reused across sites, and only ever
 sent to Google's Gemini endpoint.
 
 **Using it** - click **AI** in the toolbar to open the AI panel:
