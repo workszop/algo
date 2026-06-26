@@ -14,9 +14,10 @@ The toolbar appears fixed at the top of the page with buttons to:
 - **High contrast** - boost page contrast and saturation.
 - **Dark mode** - invert the page colors for a dark theme (images/videos are
   kept un-inverted).
-- **✨ AI** - open a panel where you paste your Gemini API key and describe, in
-  plain language, the changes you want. Gemini generates DOM-manipulation code
-  that is run on the page (see [AI changes](#ai-changes-gemini) below).
+- **AI** - open a panel where you paste your Gemini API key, pick a model
+  (Flash or Lite) and describe, in plain language, the changes you want. Gemini
+  generates DOM-manipulation code that is run on the page (see
+  [AI changes](#ai-changes-gemini) below).
 - **Reset all** - undo every change on the page.
 - **✕** - hide the toolbar (a small "♿ Accessibility" handle stays in the
   top-right corner so you can bring it back).
@@ -37,15 +38,17 @@ overrides entirely.
 
 ## AI changes (Gemini)
 
-Click **✨ AI** in the toolbar to open the AI panel:
+Click **AI** in the toolbar to open the AI panel:
 
 1. Paste your **Gemini API key** (get one from
    [Google AI Studio](https://aistudio.google.com/apikey)). The key is stored
    locally in `chrome.storage.local` and reused across sites - it is only ever
    sent to Google's Gemini endpoint.
-2. Type what you want in plain language, e.g. *"use a dark background, enlarge
+2. Pick a **model** - *Flash* (`gemini-3.5-flash`, higher quality) or *Lite*
+   (`gemini-3.5-flash-lite`, faster and cheaper). The choice is remembered.
+3. Type what you want in plain language, e.g. *"use a dark background, enlarge
    the headings and hide the sidebar"*.
-3. Press **Apply** (or `Ctrl`/`Cmd` + `Enter`).
+4. Press **Apply** (or `Ctrl`/`Cmd` + `Enter`).
 
 The extension sends your request, the page URL/title and a truncated snapshot of
 the page's HTML to Gemini, which returns JavaScript that manipulates the live

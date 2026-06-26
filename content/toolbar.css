@@ -158,6 +158,26 @@
   color: #7b8794 !important;
 }
 
+#a11y-ai-model {
+  all: unset;
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  height: 30px !important;
+  padding: 0 8px !important;
+  border: 1px solid #3e4c59 !important;
+  border-radius: 6px !important;
+  background: #0f1720 !important;
+  color: #fff !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+}
+
+#a11y-ai-model option {
+  color: #fff !important;
+  background: #16202a !important;
+}
+
 #a11y-ai-apply {
   background: #2bb673 !important;
 }
