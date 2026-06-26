@@ -48,6 +48,11 @@
 
   let state = { ...DEFAULT_STATE };
 
+  // True once Gemini has applied changes to the page this session. AI edits are
+  // inline styles / DOM mutations on arbitrary elements (not persisted), so the
+  // only reliable way to fully undo them is a page reload - see resetAll().
+  let aiChangesApplied = false;
+
   // Remembers each element's original font-size / line-height (in px) so that
   // repeated adjustments scale from the original value instead of compounding.
   const baseFontSize = new WeakMap();
@@ -156,11 +161,23 @@
   }
 
   function resetAll() {
+    const hadAiChanges = aiChangesApplied;
     state = { ...DEFAULT_STATE, hidden: state.hidden };
+    save(); // persist the reset first, so a reload comes back to a clean page
+
+    if (hadAiChanges) {
+      // AI edits live as inline styles / DOM mutations on arbitrary elements
+      // and can't be reliably walked back in place; reloading restores the
+      // original page. The reset state is already saved, so nothing re-applies.
+      try {
+        location.reload();
+        return;
+      } catch (e) {
+        /* fall through to the in-place reset below */
+      }
+    }
+
     applyAll();
-    // Note: AI changes apply inline styles / DOM edits to arbitrary elements;
-    // reloading the page is the way to fully undo them.
-    save();
     syncButtons();
   }
 
@@ -185,10 +202,10 @@
     }
   }
 
-  // The Quantica Q (octagon) brand mark, rendered white on the dark bar.
+  // The Quantica Q (octagon) brand mark in its native magenta, on the dark bar.
   function brandMark(height) {
     const img = document.createElement("img");
-    img.src = assetUrl("icons/qmark-white.png");
+    img.src = assetUrl("icons/qmark-magenta.png");
     img.alt = "Quantica";
     img.decoding = "async";
     if (height) img.style.height = height;
@@ -504,11 +521,12 @@
       if (changed === 0) {
         setAiStatus("No matching elements were found to change.", "error");
       } else {
+        aiChangesApplied = true; // let "Reset all" reload to a clean page
         setAiStatus(
           "Applied changes to " +
             changed +
             (changed === 1 ? " element. " : " elements. ") +
-            "Reload the page to undo them.",
+            'Use "Reset all" to restore the original page.',
           "ok"
         );
       }
