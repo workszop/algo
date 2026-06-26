@@ -7,39 +7,47 @@
     <title>Accessibility Toolbar</title>
   </head>
   <body>
-    <h1>Accessibility Toolbar</h1>
-    <p class="hint">
-      A toolbar is shown at the top of every page so you can adjust font size,
-      line spacing, contrast and more. Settings are remembered per website.
-    </p>
-    <div class="actions">
-      <button id="show">Show toolbar on this page</button>
-      <button id="reset">Reset this page</button>
-    </div>
-    <p id="status" class="status"></p>
+    <header class="brandbar">
+      <img class="brand-q" src="../icons/qmark-magenta.png" alt="Quantica" />
+      <span class="brand-word">Accessibility</span>
+    </header>
 
-    <hr class="divider" />
+    <div class="content">
+      <p class="hint">
+        A toolbar is shown at the top of every page so you can adjust font size,
+        line spacing, contrast and more. Settings are remembered per website.
+      </p>
+      <div class="actions">
+        <button id="show" class="btn btn-primary">
+          Show toolbar on this page
+        </button>
+        <button id="reset" class="btn btn-ghost">Reset this page</button>
+      </div>
+      <p id="status" class="status"></p>
 
-    <h2>AI (Gemini)</h2>
-    <p class="hint">
-      Add your Gemini API key once to enable the toolbar's <strong>AI</strong>
-      button. Get a key from
-      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
-        >Google AI Studio</a
-      >. It is stored locally in your browser and only sent to Google's Gemini
-      API.
-    </p>
-    <div class="field">
-      <input
-        id="api-key"
-        type="password"
-        placeholder="Gemini API key"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <button id="save-key">Save</button>
+      <hr class="divider" />
+
+      <h2 class="eyebrow">AI (Gemini)</h2>
+      <p class="hint">
+        Add your Gemini API key once to enable the toolbar's <strong>AI</strong>
+        button. Get a key from
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"
+          >Google AI Studio</a
+        >. It is stored locally in your browser and only sent to Google's Gemini
+        API.
+      </p>
+      <div class="field">
+        <input
+          id="api-key"
+          type="password"
+          placeholder="Gemini API key"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="save-key" class="btn btn-primary">Save</button>
+      </div>
+      <p id="key-status" class="status"></p>
     </div>
-    <p id="key-status" class="status"></p>
 
     <script src="popup.js"></script>
   </body>
