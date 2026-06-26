@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Accessibility Toolbar",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Adds a toolbar at the top of any website to adjust font size, line spacing, contrast and more - including AI-powered changes via Gemini.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
@@ -28,6 +28,12 @@
       "js": ["content/gemini.js", "content/toolbar.js"],
       "css": ["content/toolbar.css"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/qmark-white.png"],
+      "matches": ["<all_urls>"]
     }
   ]
 }
