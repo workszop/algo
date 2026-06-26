@@ -61,11 +61,21 @@ with large, readable text:
 The API key lives in the popup, so the in-page panel only shows the model and
 prompt - you won't be asked for the key every time.
 
-The extension sends your request, the page URL/title and a truncated snapshot of
-the page's HTML to Gemini, which returns a **structured change spec** (JSON) -
-a list of style rules (CSS selector + declarations) and DOM operations
-(hide / remove / set text / etc.). The extension applies that spec with safe DOM
-APIs (`element.style`, `classList`, …).
+Rather than dumping raw HTML at the model, the extension builds a **curated page
+snapshot**: the URL/title, the viewport size, a plain-language summary of notable
+regions (main content, nav, sidebar, cookie banner, ads, dialogs, sticky bars,
+headings, forms), a numbered list of **stable selector candidates**, and a few
+visible text samples. Gemini picks from those real selectors instead of guessing
+them from arbitrary markup, which makes its changes far more reliable.
+
+Gemini returns a **structured change spec** (JSON) - a list of style rules (CSS
+selector + declarations, with an optional `reason`) and DOM operations
+(hide / remove / set text / set attribute / etc.), plus optional `warnings`.
+Before applying it, the extension **validates** the spec: invalid selectors are
+skipped, and style declarations are filtered against an allow-list so risky
+layout properties (`position`, `display`, `z-index`, `transform`, …) are never
+applied even if the model returns them. Anything skipped is logged to the
+console. The spec is applied with safe DOM APIs (`element.style`, `classList`, …).
 
 It deliberately does **not** evaluate AI-generated JavaScript. Running code
 strings (`eval` / `new Function`) is blocked by the Content Security Policy on

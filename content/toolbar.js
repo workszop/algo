@@ -407,25 +407,246 @@
     aiStatus.dataset.kind = kind || "";
   }
 
-  function pageContext() {
-    // The Gemini client truncates the HTML to a safe size.
-    const html = (document.body && document.body.innerHTML) || "";
-    return { url: location.href, title: document.title, html };
+  // --- Page summarizer (builds the snapshot sent to Gemini) -----------------
+
+  // Property allow/block lists. The spec is validated against these before
+  // anything is applied, so the model can't set risky layout properties via
+  // `styles` even if it tries. Mirrors the lists in the system instruction.
+  const ALLOWED_PROPERTIES = new Set([
+    "color", "background-color", "font-size", "line-height", "letter-spacing",
+    "word-spacing", "font-family", "font-weight", "text-align",
+    "text-decoration", "outline", "outline-offset", "border", "border-color",
+    "border-radius", "box-shadow", "max-width", "width", "margin", "padding",
+    "animation", "transition", "scroll-behavior",
+  ]);
+
+  // Reject ids/classes that look auto-generated (hashes, CSS-modules, long
+  // digit runs) so we only hand Gemini stable selectors it can rely on.
+  function isStableName(name) {
+    if (typeof name !== "string") return false;
+    name = name.trim();
+    if (name.length < 2 || name.length > 40) return false;
+    if (/^\d/.test(name)) return false;
+    if (/\d{4,}/.test(name)) return false; // long digit runs
+    if (/(^|[-_])[0-9a-f]{6,}([-_]|$)/i.test(name)) return false; // hash-like
+    if (/[a-z][A-Z].*\d/.test(name)) return false; // camelCase + digit
+    return /^[a-zA-Z][\w-]*$/.test(name);
   }
 
-  // Apply Gemini's structured change spec with safe DOM APIs. No strings are
-  // evaluated as JavaScript, so this works even under strict page CSPs.
-  // Returns the number of elements changed.
+  function elementClasses(el) {
+    const c = el.className;
+    if (typeof c !== "string") return []; // SVG etc.: className isn't a string
+    return c.trim() ? c.trim().split(/\s+/) : [];
+  }
+
+  // Build a stable, readable selector for one element.
+  function selectorFor(el) {
+    if (!el || el.nodeType !== 1) return "";
+    const tag = el.tagName.toLowerCase();
+    if (el.id && isStableName(el.id)) return tag + "#" + el.id;
+    const role = el.getAttribute && el.getAttribute("role");
+    if (role && isStableName(role)) return tag + '[role="' + role + '"]';
+    const cls = elementClasses(el).find(isStableName);
+    if (cls) return tag + "." + cls;
+    return tag;
+  }
+
+  function firstMatch(selectors) {
+    for (let i = 0; i < selectors.length; i++) {
+      try {
+        const el = document.querySelector(selectors[i]);
+        if (el && !isOwnNode(el)) return el;
+      } catch (e) {
+        /* skip unsupported selector */
+      }
+    }
+    return null;
+  }
+
+  // First banner-sized element whose id/class matches `re` (skips our own UI).
+  // The size guard avoids matching small links like a footer "cookie statement"
+  // when we're really after the cookie banner / sidebar / ad container.
+  function findByName(re) {
+    const els = document.body
+      ? document.body.querySelectorAll("[id], [class]")
+      : [];
+    for (let i = 0; i < els.length && i < 4000; i++) {
+      const el = els[i];
+      if (isOwnNode(el)) continue;
+      const hay = (
+        (el.id || "") +
+        " " +
+        elementClasses(el).join(" ")
+      ).toLowerCase();
+      if (!re.test(hay)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width >= 240 || r.height >= 60) return el; // banner-/panel-sized
+    }
+    return null;
+  }
+
+  // First sizable element with a fixed/sticky position (bars, banners, popups).
+  function findSticky() {
+    const els = document.body ? document.body.querySelectorAll("*") : [];
+    for (let i = 0; i < els.length && i < 4000; i++) {
+      const el = els[i];
+      if (isOwnNode(el)) continue;
+      const pos = getComputedStyle(el).position;
+      if (pos === "fixed" || pos === "sticky") {
+        const r = el.getBoundingClientRect();
+        if (r.width > 60 && r.height > 24) return el;
+      }
+    }
+    return null;
+  }
+
+  function sampleTextOf(selector, max) {
+    try {
+      const el = document.querySelector(selector);
+      if (!el) return "";
+      const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+      return t.slice(0, max || 120).replace(/"/g, "'");
+    } catch (e) {
+      return "";
+    }
+  }
+
+  // Curated snapshot for the model: viewport, a plain-language summary of
+  // notable regions, a numbered list of stable selector candidates, and a few
+  // visible text samples - sent in place of raw innerHTML so the model picks
+  // from real selectors instead of inferring them from arbitrary markup.
+  function buildPageSnapshot() {
+    const summary = [];
+    const candidates = [];
+    const add = (sel) => {
+      if (sel && candidates.indexOf(sel) === -1) candidates.push(sel);
+    };
+
+    add("body");
+
+    const main = firstMatch(["main", "article", '[role="main"]']);
+    const mainSel = main ? selectorFor(main) : "";
+    if (mainSel) {
+      summary.push("Main content: " + mainSel);
+      add(mainSel);
+      add(mainSel + " p");
+      add(mainSel + " li");
+    } else {
+      summary.push("Main content: not clearly marked - use body / p");
+    }
+
+    const nav = firstMatch(["nav", '[role="navigation"]']);
+    if (nav) {
+      const s = selectorFor(nav);
+      summary.push("Navigation: " + s);
+      add(s);
+    }
+
+    const sidebar =
+      firstMatch(["aside", '[role="complementary"]']) || findByName(/sidebar/);
+    if (sidebar) {
+      const s = selectorFor(sidebar);
+      summary.push("Sidebar: " + s);
+      add(s);
+    }
+
+    const cookie = findByName(/cookie|consent|gdpr/);
+    if (cookie) {
+      const s = selectorFor(cookie);
+      summary.push("Cookie/consent banner: " + s);
+      add(s);
+    }
+
+    const ad = findByName(/(^|[-_ ])ads?([-_ ]|$)|advert|sponsor|promo/);
+    if (ad) {
+      const s = selectorFor(ad);
+      summary.push("Ad/promo: " + s);
+      add(s);
+    }
+
+    const dialog = firstMatch(['[role="dialog"]', "dialog", ".modal"]);
+    if (dialog) {
+      const s = selectorFor(dialog);
+      summary.push("Dialog/modal: " + s);
+      add(s);
+    }
+
+    const sticky = findSticky();
+    if (sticky) {
+      const s = selectorFor(sticky);
+      summary.push("Sticky/fixed element: " + s);
+      add(s);
+    }
+
+    const headings = ["h1", "h2", "h3"].filter((h) => {
+      try {
+        return !!document.querySelector(h);
+      } catch (e) {
+        return false;
+      }
+    });
+    if (headings.length) {
+      summary.push("Main headings: " + headings.join(", "));
+      add(headings.join(", "));
+    }
+
+    if (firstMatch(["form", "input", "textarea", "select"])) {
+      summary.push("Forms: detected (input, textarea, select, button)");
+      add("input, textarea, select");
+    } else {
+      summary.push("Forms: none detected");
+    }
+
+    add("p, li, span");
+    add("a, button");
+
+    const samples = [];
+    const seen = {};
+    const trySample = (sel) => {
+      if (!sel || seen[sel]) return;
+      seen[sel] = true;
+      const t = sampleTextOf(sel, 120);
+      if (t) samples.push({ selector: sel, text: t });
+    };
+    trySample("h1");
+    trySample(mainSel ? mainSel + " p" : "p");
+    if (nav) trySample(selectorFor(nav));
+    trySample("h2");
+
+    return {
+      url: location.href,
+      title: document.title,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      summary: summary,
+      candidates: candidates.slice(0, 14),
+      samples: samples.slice(0, 6),
+    };
+  }
+
+  // Apply Gemini's structured change spec with safe DOM APIs, after validating
+  // it: invalid selectors are skipped, and `styles` declarations are filtered
+  // against ALLOWED_PROPERTIES so risky layout properties never get applied
+  // even if the model returns them. No strings are evaluated as JavaScript, so
+  // this works even under strict page CSPs. Returns { changed, warnings }.
   function applyAiSpec(spec) {
     if (!spec || typeof spec !== "object") {
       throw new Error("Gemini returned an unexpected response.");
     }
 
+    const warnings = [];
+    if (Array.isArray(spec.warnings)) {
+      spec.warnings.forEach((w) => {
+        if (w) warnings.push(String(w));
+      });
+    }
+
+    // Resolve a selector, noting any the browser rejects rather than aborting.
     const select = (selector) => {
       try {
         return document.querySelectorAll(selector);
       } catch (e) {
-        return []; // skip invalid selectors rather than aborting
+        warnings.push("Skipped invalid selector: " + selector);
+        return [];
       }
     };
 
@@ -437,11 +658,16 @@
         if (isOwnNode(el)) return; // never restyle our own toolbar
         rule.declarations.forEach((d) => {
           if (!d || !d.property || d.value == null) return;
+          const prop = String(d.property).toLowerCase().trim();
+          if (!ALLOWED_PROPERTIES.has(prop)) {
+            warnings.push("Skipped property not on the allow-list: " + prop);
+            return;
+          }
           try {
-            el.style.setProperty(d.property, String(d.value), "important");
+            el.style.setProperty(prop, String(d.value), "important");
             changed++;
           } catch (e) {
-            /* ignore unsupported property/value */
+            /* ignore unsupported value */
           }
         });
       });
@@ -471,7 +697,7 @@
             if (op.value) el.classList.remove(op.value);
             break;
           case "setAttribute":
-            if (op.name) el.setAttribute(op.name, op.value || "");
+            if (op.attribute) el.setAttribute(op.attribute, op.value || "");
             break;
           default:
             return;
@@ -480,7 +706,7 @@
       });
     });
 
-    return changed;
+    return { changed: changed, warnings: warnings };
   }
 
   async function runAi() {
@@ -515,18 +741,29 @@
         apiKey,
         model,
         requirement,
-        context: pageContext(),
+        context: buildPageSnapshot(),
       });
-      const changed = applyAiSpec(spec);
+      const { changed, warnings } = applyAiSpec(spec);
+      if (warnings.length) {
+        // Surfaced for debugging; the status line stays user-friendly.
+        console.warn("[a11y AI] " + warnings.length + " warning(s):", warnings);
+      }
+      const skipped = warnings.length
+        ? " " + warnings.length + " item(s) skipped (see console)."
+        : "";
       if (changed === 0) {
-        setAiStatus("No matching elements were found to change.", "error");
+        setAiStatus(
+          "No changes were applied." + skipped,
+          "error"
+        );
       } else {
         aiChangesApplied = true; // let "Reset all" reload to a clean page
         setAiStatus(
           "Applied changes to " +
             changed +
-            (changed === 1 ? " element. " : " elements. ") +
-            'Use "Reset all" to restore the original page.',
+            (changed === 1 ? " element." : " elements.") +
+            skipped +
+            ' Use "Reset all" to restore the original page.',
           "ok"
         );
       }
