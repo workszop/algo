@@ -203,12 +203,12 @@
   }
 
   // The Quantica Q (octagon) brand mark in its native magenta, on the dark bar.
-  function brandMark(height) {
+  // Sized via CSS (.a11y-brand img / #a11y-toolbar-handle img).
+  function brandMark() {
     const img = document.createElement("img");
     img.src = assetUrl("icons/qmark-magenta.png");
     img.alt = "Quantica";
     img.decoding = "async";
-    if (height) img.style.height = height;
     return img;
   }
 
