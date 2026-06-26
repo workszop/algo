@@ -215,5 +215,5 @@
     }
   }
 
-  window.__a11yGemini = { generate, DEFAULT_MODEL };
+  window.__a11yGemini = { generate };
 })();
