@@ -220,11 +220,7 @@
       btn("Dark mode", "Toggle dark / inverted mode", () => toggle("darkMode"))
     ).dataset.key = "darkMode";
 
-    const aiBtn = btn(
-      "✨ AI",
-      "Make AI-powered changes with Gemini",
-      toggleAiPanel
-    );
+    const aiBtn = btn("AI", "Make AI-powered changes with Gemini", toggleAiPanel);
     aiBtn.id = "a11y-ai-btn";
     row.appendChild(aiBtn);
 
@@ -247,7 +243,13 @@
 
   const GEMINI_STORE = "a11y:gemini"; // global (not per-host) - holds the API key
 
-  let aiPanelEl, aiInput, aiKeyInput, aiApplyBtn, aiStatus;
+  // Selectable Gemini models; the first is the default.
+  const GEMINI_MODELS = [
+    { value: "gemini-3.5-flash", label: "Flash" },
+    { value: "gemini-3.5-flash-lite", label: "Lite" },
+  ];
+
+  let aiPanelEl, aiInput, aiKeyInput, aiModelSelect, aiApplyBtn, aiStatus;
 
   const loadGeminiCfg = async () => (await storageGet(GEMINI_STORE)) || {};
   const saveGeminiCfg = (cfg) => storageSet(GEMINI_STORE, cfg);
@@ -279,10 +281,27 @@
     aiKeyInput.autocomplete = "off";
     aiKeyInput.spellcheck = false;
 
+    aiModelSelect = document.createElement("select");
+    aiModelSelect.id = "a11y-ai-model";
+    aiModelSelect.title = "Gemini model";
+    GEMINI_MODELS.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.value;
+      opt.textContent = m.label;
+      aiModelSelect.appendChild(opt);
+    });
+    aiModelSelect.addEventListener("change", () => {
+      loadGeminiCfg().then((cfg) => {
+        cfg.model = aiModelSelect.value;
+        saveGeminiCfg(cfg);
+      });
+    });
+
     aiApplyBtn = btn("Apply", "Send to Gemini and apply the changes", runAi);
     aiApplyBtn.id = "a11y-ai-apply";
 
     controls.appendChild(aiKeyInput);
+    controls.appendChild(aiModelSelect);
     controls.appendChild(aiApplyBtn);
 
     aiStatus = document.createElement("span");
@@ -292,9 +311,10 @@
     aiPanelEl.appendChild(controls);
     aiPanelEl.appendChild(aiStatus);
 
-    // Pre-fill the saved key (stored once, reused across sites).
+    // Pre-fill the saved key and model (stored once, reused across sites).
     loadGeminiCfg().then((cfg) => {
       if (cfg.apiKey) aiKeyInput.value = cfg.apiKey;
+      aiModelSelect.value = cfg.model || GEMINI_MODELS[0].value;
     });
 
     return aiPanelEl;
@@ -351,8 +371,10 @@
       return;
     }
 
+    const model = aiModelSelect.value;
     const cfg = await loadGeminiCfg();
-    cfg.apiKey = apiKey; // persist the key for reuse
+    cfg.apiKey = apiKey; // persist the key and model for reuse
+    cfg.model = model;
     saveGeminiCfg(cfg);
 
     setAiStatus("Asking Gemini…", "busy");
@@ -360,7 +382,7 @@
     try {
       const code = await window.__a11yGemini.generate({
         apiKey,
-        model: cfg.model,
+        model,
         requirement,
         context: pageContext(),
       });
