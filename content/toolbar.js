@@ -175,6 +175,26 @@
   let toolbarEl = null;
   let handleEl = null;
 
+  // Resolve a packaged asset (e.g. the brand mark) to a URL usable from the
+  // host page. Listed under web_accessible_resources in the manifest.
+  function assetUrl(path) {
+    try {
+      return chrome.runtime.getURL(path);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  // The Quantica Q (octagon) brand mark, rendered white on the dark bar.
+  function brandMark(height) {
+    const img = document.createElement("img");
+    img.src = assetUrl("icons/qmark-white.png");
+    img.alt = "Quantica";
+    img.decoding = "async";
+    if (height) img.style.height = height;
+    return img;
+  }
+
   function btn(label, title, onClick, extraClass) {
     const b = document.createElement("button");
     b.type = "button";
@@ -198,10 +218,15 @@
     const row = document.createElement("div");
     row.className = "a11y-row";
 
+    // Brand lockup: Quantica Q mark + "Accessibility" wordmark.
+    const brand = document.createElement("span");
+    brand.className = "a11y-brand";
+    brand.appendChild(brandMark());
     const label = document.createElement("span");
     label.className = "a11y-label";
     label.textContent = "Accessibility";
-    row.appendChild(label);
+    brand.appendChild(label);
+    row.appendChild(brand);
 
     row.appendChild(
       btn("A−", "Decrease font size", () =>
@@ -498,7 +523,8 @@
     handleEl = document.createElement("button");
     handleEl.id = "a11y-toolbar-handle";
     handleEl.type = "button";
-    handleEl.textContent = "♿ Accessibility";
+    handleEl.appendChild(brandMark());
+    handleEl.appendChild(document.createTextNode("Accessibility"));
     handleEl.title = "Show accessibility toolbar";
     handleEl.addEventListener("click", (e) => {
       e.preventDefault();

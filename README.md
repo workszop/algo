@@ -19,7 +19,7 @@ The toolbar appears fixed at the top of the page with buttons to:
   extension applies to the page with safe DOM APIs. Your Gemini API key is set
   once in the extension popup (see [AI changes](#ai-changes-gemini) below).
 - **Reset all** - undo every change on the page.
-- **✕** - hide the toolbar (a small "♿ Accessibility" handle stays in the
+- **✕** - hide the toolbar (a small Quantica "Accessibility" handle stays in the
   top-right corner so you can bring it back).
 
 Settings are saved **per website** (via `chrome.storage.local`) and

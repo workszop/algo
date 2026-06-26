@@ -1,6 +1,31 @@
-/* Accessibility Toolbar - injected styles.
+/* Accessibility Toolbar - injected styles, in the Quantica Lab brand.
    All selectors are namespaced under #a11y-toolbar to avoid clashing with the host page.
-   Values use !important because host pages frequently set aggressive global styles. */
+   Values use !important because host pages frequently set aggressive global styles.
+
+   Brand tokens are inlined as custom properties rather than @import-ed: content
+   scripts run against host pages whose CSP can block remote @import, and we want
+   the bar to render correctly everywhere. Hero color is Quantica Pink #C41E54;
+   surfaces are near-black #111111. Type is Satoshi (display/sans) + Geist Mono. */
+#a11y-toolbar,
+#a11y-toolbar-handle,
+#a11y-ai-panel {
+  --q-pink: #C41E54;        /* hero */
+  --q-rose: #FF4D9A;        /* emphasis / focus */
+  --q-berry: #8A004C;       /* pressed depth */
+  --q-ink: #111111;         /* primary dark surface */
+  --q-ink-2: #1B1B22;       /* elevated dark surface */
+  --q-ink-3: #0A0A0E;       /* recessed (inputs) */
+  --q-white: #FFFFFF;
+  --q-fg-2: #C9C9D2;        /* secondary text on dark */
+  --q-fg-3: #9A9AA5;        /* tertiary / metadata */
+  --q-line: rgba(255, 255, 255, 0.12); /* hairline on dark */
+  --q-success: #00A37A;
+  --q-error: #FF4D6D;
+  --q-info: #7861FF;
+  --q-font-sans: "Satoshi", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --q-font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
 
 #a11y-toolbar {
   position: fixed !important;
@@ -13,14 +38,16 @@
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
-  background: #1f2933 !important;
-  color: #fff !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  background: var(--q-ink) !important;
+  color: var(--q-white) !important;
+  /* hairline brand-pink underline grounds the bar against the page */
+  border-bottom: 2px solid var(--q-pink) !important;
+  font-family: var(--q-font-sans) !important;
   font-size: 14px !important;
   line-height: 1.2 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  box-shadow: 0 6px 18px rgba(17, 17, 17, 0.28) !important;
   transform: translateY(0);
-  transition: transform 0.2s ease !important;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 #a11y-toolbar .a11y-row {
@@ -28,18 +55,38 @@
   align-items: center !important;
   flex-wrap: wrap !important;
   gap: 6px !important;
-  padding: 6px 10px !important;
+  padding: 8px 14px !important;
 }
 
 #a11y-toolbar.a11y-hidden {
   transform: translateY(-100%);
 }
 
-#a11y-toolbar .a11y-label {
-  font-weight: 600 !important;
-  margin-right: 4px !important;
+/* Brand mark: the Quantica Q (octagon) sits at the head of the bar. */
+#a11y-toolbar .a11y-brand {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  margin-right: 6px !important;
+  padding-right: 12px !important;
+  border-right: 1px solid var(--q-line) !important;
   white-space: nowrap !important;
-  opacity: 0.85 !important;
+}
+
+#a11y-toolbar .a11y-brand img {
+  display: block !important;
+  height: 22px !important;
+  width: auto !important;
+}
+
+#a11y-toolbar .a11y-label {
+  font-family: var(--q-font-mono) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  color: var(--q-fg-2) !important;
+  white-space: nowrap !important;
 }
 
 #a11y-toolbar .a11y-spacer {
@@ -55,44 +102,60 @@
   justify-content: center !important;
   min-width: 34px !important;
   height: 30px !important;
-  padding: 0 10px !important;
+  padding: 0 12px !important;
+  border: 1px solid var(--q-line) !important;
   border-radius: 6px !important;
-  background: #3e4c59 !important;
-  color: #fff !important;
+  background: var(--q-ink-2) !important;
+  color: var(--q-white) !important;
   font-family: inherit !important;
   font-size: 14px !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
   line-height: 1 !important;
   white-space: nowrap !important;
   user-select: none !important;
-  transition: background 0.12s ease !important;
+  transition: background 0.12s cubic-bezier(0.2, 0.6, 0.2, 1),
+    border-color 0.12s cubic-bezier(0.2, 0.6, 0.2, 1) !important;
 }
 
 #a11y-toolbar button:hover {
-  background: #52606d !important;
+  background: #262630 !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
 }
 
 #a11y-toolbar button:active {
-  background: #616e7c !important;
+  background: #2e2e3a !important;
 }
 
+/* On state uses the hero pink - this is the brand's signal color. */
 #a11y-toolbar button.a11y-active {
-  background: #2bb673 !important;
+  background: var(--q-pink) !important;
+  border-color: var(--q-pink) !important;
+  color: var(--q-white) !important;
 }
 
 #a11y-toolbar button.a11y-active:hover {
-  background: #29a869 !important;
+  background: var(--q-berry) !important;
+  border-color: var(--q-berry) !important;
+}
+
+#a11y-toolbar button:focus-visible {
+  outline: 2px solid var(--q-rose) !important;
+  outline-offset: 2px !important;
 }
 
 #a11y-toolbar button.a11y-close {
   background: transparent !important;
+  border-color: transparent !important;
   font-size: 18px !important;
   min-width: 30px !important;
   padding: 0 8px !important;
+  color: var(--q-fg-3) !important;
 }
 
 #a11y-toolbar button.a11y-close:hover {
-  background: #52606d !important;
+  background: var(--q-ink-2) !important;
+  border-color: var(--q-line) !important;
+  color: var(--q-white) !important;
 }
 
 #a11y-toolbar button:disabled {
@@ -114,15 +177,17 @@
   z-index: 2147483647 !important;
   flex-direction: column !important;
   gap: 14px !important;
-  padding: 18px !important;
-  border: 1px solid #3e4c59 !important;
-  border-radius: 12px !important;
-  background: #16202a !important;
-  color: #fff !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  padding: 20px !important;
+  border: 1px solid var(--q-line) !important;
+  border-top: 3px solid var(--q-pink) !important;
+  border-radius: 14px !important;
+  background: var(--q-ink-2) !important;
+  color: var(--q-white) !important;
+  font-family: var(--q-font-sans) !important;
   font-size: 17px !important;
   line-height: 1.4 !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
+  box-shadow: 0 20px 48px rgba(17, 17, 17, 0.45),
+    0 12px 32px rgba(196, 30, 84, 0.16) !important;
 }
 
 #a11y-ai-panel.open {
@@ -138,6 +203,7 @@
 #a11y-ai-panel .a11y-ai-title {
   font-size: 18px !important;
   font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
 }
 
 #a11y-ai-panel button.a11y-ai-x {
@@ -147,12 +213,12 @@
   line-height: 1 !important;
   padding: 4px 8px !important;
   border-radius: 6px !important;
-  color: #cbd2d9 !important;
+  color: var(--q-fg-3) !important;
 }
 
 #a11y-ai-panel button.a11y-ai-x:hover {
-  background: #3e4c59 !important;
-  color: #fff !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--q-white) !important;
 }
 
 #a11y-ai-input {
@@ -161,18 +227,23 @@
   width: 100% !important;
   min-height: 90px !important;
   padding: 12px 14px !important;
-  border: 1px solid #3e4c59 !important;
+  border: 1px solid var(--q-line) !important;
   border-radius: 8px !important;
-  background: #0f1720 !important;
-  color: #fff !important;
+  background: var(--q-ink-3) !important;
+  color: var(--q-white) !important;
   font-family: inherit !important;
   font-size: 17px !important;
   line-height: 1.5 !important;
   resize: vertical !important;
+  transition: border-color 0.12s cubic-bezier(0.2, 0.6, 0.2, 1) !important;
+}
+
+#a11y-ai-input:focus {
+  border-color: var(--q-rose) !important;
 }
 
 #a11y-ai-input::placeholder {
-  color: #7b8794 !important;
+  color: var(--q-fg-3) !important;
 }
 
 #a11y-ai-panel .a11y-ai-controls {
@@ -189,9 +260,9 @@
   margin: 0 !important;
   /* room on the right for the custom chevron */
   padding: 0 38px 0 12px !important;
-  border: 1px solid #3e4c59 !important;
+  border: 1px solid var(--q-line) !important;
   border-radius: 8px !important;
-  color: #fff !important;
+  color: var(--q-white) !important;
   font-family: inherit !important;
   font-size: 16px !important;
   /* vertically centre the selected text */
@@ -204,16 +275,20 @@
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   appearance: none !important;
-  background-color: #0f1720 !important;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23cbd2d9' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
+  background-color: var(--q-ink-3) !important;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%239A9AA5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
   background-repeat: no-repeat !important;
   background-position: right 12px center !important;
   background-size: 14px 14px !important;
 }
 
+#a11y-ai-model:focus {
+  border-color: var(--q-rose) !important;
+}
+
 #a11y-ai-model option {
-  color: #fff !important;
-  background: #16202a !important;
+  color: var(--q-white) !important;
+  background: var(--q-ink-2) !important;
 }
 
 #a11y-ai-panel #a11y-ai-apply {
@@ -224,41 +299,45 @@
   align-items: center !important;
   justify-content: center !important;
   height: 44px !important;
-  padding: 0 22px !important;
+  padding: 0 24px !important;
   border-radius: 8px !important;
   font-family: inherit !important;
   font-size: 16px !important;
   font-weight: 600 !important;
-  color: #fff !important;
-  background: #2bb673 !important;
+  color: var(--q-white) !important;
+  /* primary action = Quantica Pink */
+  background: var(--q-pink) !important;
+  box-shadow: 0 6px 18px rgba(196, 30, 84, 0.28) !important;
   cursor: pointer !important;
+  transition: background 0.12s cubic-bezier(0.2, 0.6, 0.2, 1) !important;
 }
 
 #a11y-ai-panel #a11y-ai-apply:hover {
-  background: #29a869 !important;
+  background: var(--q-berry) !important;
 }
 
 #a11y-ai-panel #a11y-ai-apply:disabled {
-  opacity: 0.6 !important;
+  opacity: 0.55 !important;
+  box-shadow: none !important;
   cursor: default !important;
 }
 
 #a11y-ai-status {
   font-size: 15px !important;
   min-height: 18px !important;
-  color: #9aa5b1 !important;
+  color: var(--q-fg-3) !important;
 }
 
 #a11y-ai-status[data-kind="error"] {
-  color: #f9703e !important;
+  color: var(--q-error) !important;
 }
 
 #a11y-ai-status[data-kind="ok"] {
-  color: #2bb673 !important;
+  color: var(--q-success) !important;
 }
 
 #a11y-ai-status[data-kind="busy"] {
-  color: #4098d7 !important;
+  color: var(--q-info) !important;
 }
 
 /* Floating "show" handle shown when the bar is collapsed. */
@@ -267,20 +346,32 @@
   top: 0 !important;
   right: 16px !important;
   z-index: 2147483647 !important;
-  background: #1f2933 !important;
-  color: #fff !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  background: var(--q-ink) !important;
+  color: var(--q-white) !important;
   border: none !important;
-  border-radius: 0 0 6px 6px !important;
-  padding: 4px 10px !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
+  border-bottom: 2px solid var(--q-pink) !important;
+  border-radius: 0 0 8px 8px !important;
+  padding: 6px 12px !important;
+  font-family: var(--q-font-mono) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
   cursor: pointer !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+  box-shadow: 0 4px 12px rgba(17, 17, 17, 0.28) !important;
+}
+
+#a11y-toolbar-handle img {
+  display: block !important;
+  height: 16px !important;
+  width: auto !important;
 }
 
 #a11y-toolbar-handle:hover {
-  background: #3e4c59 !important;
+  background: var(--q-ink-2) !important;
 }
 
 /* ---- Page-level effects applied to <html> ---- */
