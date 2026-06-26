@@ -158,9 +158,8 @@
   function resetAll() {
     state = { ...DEFAULT_STATE, hidden: state.hidden };
     applyAll();
-    // Remove styling injected by AI requests (structural DOM edits need a reload).
-    const aiStyle = document.getElementById("a11y-ai-style");
-    if (aiStyle) aiStyle.remove();
+    // Note: AI changes apply inline styles / DOM edits to arbitrary elements;
+    // reloading the page is the way to fully undo them.
     save();
     syncButtons();
   }
@@ -372,15 +371,74 @@
     return { url: location.href, title: document.title, html };
   }
 
-  // Execute Gemini's code in the content-script isolated world. The DOM is
-  // shared with the page, so manipulations take effect immediately.
-  function applyAiCode(code) {
-    try {
-      // eslint-disable-next-line no-new-func
-      new Function(code)();
-    } catch (e) {
-      throw new Error("Generated code failed: " + (e.message || e));
+  // Apply Gemini's structured change spec with safe DOM APIs. No strings are
+  // evaluated as JavaScript, so this works even under strict page CSPs.
+  // Returns the number of elements changed.
+  function applyAiSpec(spec) {
+    if (!spec || typeof spec !== "object") {
+      throw new Error("Gemini returned an unexpected response.");
     }
+
+    const select = (selector) => {
+      try {
+        return document.querySelectorAll(selector);
+      } catch (e) {
+        return []; // skip invalid selectors rather than aborting
+      }
+    };
+
+    let changed = 0;
+
+    (spec.styles || []).forEach((rule) => {
+      if (!rule || !rule.selector || !Array.isArray(rule.declarations)) return;
+      select(rule.selector).forEach((el) => {
+        if (isOwnNode(el)) return; // never restyle our own toolbar
+        rule.declarations.forEach((d) => {
+          if (!d || !d.property || d.value == null) return;
+          try {
+            el.style.setProperty(d.property, String(d.value), "important");
+            changed++;
+          } catch (e) {
+            /* ignore unsupported property/value */
+          }
+        });
+      });
+    });
+
+    (spec.operations || []).forEach((op) => {
+      if (!op || !op.action || !op.selector) return;
+      select(op.selector).forEach((el) => {
+        if (isOwnNode(el)) return;
+        switch (op.action) {
+          case "hide":
+            el.style.setProperty("display", "none", "important");
+            break;
+          case "show":
+            el.style.setProperty("display", "revert", "important");
+            break;
+          case "remove":
+            el.remove();
+            break;
+          case "setText":
+            el.textContent = op.value || "";
+            break;
+          case "addClass":
+            if (op.value) el.classList.add(op.value);
+            break;
+          case "removeClass":
+            if (op.value) el.classList.remove(op.value);
+            break;
+          case "setAttribute":
+            if (op.name) el.setAttribute(op.name, op.value || "");
+            break;
+          default:
+            return;
+        }
+        changed++;
+      });
+    });
+
+    return changed;
   }
 
   async function runAi() {
@@ -411,15 +469,24 @@
     setAiStatus("Asking Gemini…", "busy");
     aiApplyBtn.disabled = true;
     try {
-      const code = await window.__a11yGemini.generate({
+      const spec = await window.__a11yGemini.generate({
         apiKey,
         model,
         requirement,
         context: pageContext(),
       });
-      if (!code) throw new Error("Gemini returned no code.");
-      applyAiCode(code);
-      setAiStatus("Changes applied. Reload the page to undo them.", "ok");
+      const changed = applyAiSpec(spec);
+      if (changed === 0) {
+        setAiStatus("No matching elements were found to change.", "error");
+      } else {
+        setAiStatus(
+          "Applied changes to " +
+            changed +
+            (changed === 1 ? " element. " : " elements. ") +
+            "Reload the page to undo them.",
+          "ok"
+        );
+      }
     } catch (err) {
       setAiStatus(err.message || String(err), "error");
     } finally {
